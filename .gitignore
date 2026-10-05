@@ -13,3 +13,5 @@
 *.swp
 .DS_Store
 Thumbs.db
+# Local template examples; compilation dependencies are included in latex/.
+/template/

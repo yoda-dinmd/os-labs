@@ -1,0 +1,216 @@
+\documentclass{../latex/utmreport}
+\newcommand{\ReportTitle}{Lab 2: Meet the OS You Will Build}
+\input{../latex/report-common.tex}
+
+\begin{document}
+\makeutmreporttitlepage
+\tableofcontents
+\clearpage
+
+\begin{utmabstract}[Abstract]
+This laboratory explores xv6 through compilation, booting, shell commands,
+source inspection, and the addition of a user program. The operating system
+was run on emulated RISC-V hardware using QEMU from an Ubuntu virtual
+machine. Existing commands demonstrated directory listing, file reading,
+output, and pipelines. Source inspection connected a user program's read
+and write requests with their kernel handlers. A new program named
+\code{sleep} was registered in the build and used the \code{pause} system
+call declared by the downloaded checkout. Runtime screenshots show a valid
+call returning to the shell and usage messages for missing and extra
+arguments. The report distinguishes these observed results from unmeasured
+properties such as pause duration and exit status.
+\utmkeywords{xv6, system calls, user programs, kernel, pipes, emulation}
+\end{utmabstract}
+
+\chapter*{Abbreviations}
+\addcontentsline{toc}{chapter}{Abbreviations}
+\noindent\begin{tabularx}{\textwidth}{lY}
+OS & operating system \\
+VM & virtual machine \\
+PID & process identifier \\
+CPU & central processing unit \\
+QEMU & the emulator used to run xv6 \\
+RISC-V & the instruction-set architecture targeted by this xv6 checkout \\
+\end{tabularx}
+
+\utmintroduction
+This laboratory follows the course exercise on building and using a small
+teaching operating system, xv6~\cite{handout}. It complements the external
+inspection of Linux in Lab 1 by exposing both the programs that request OS
+services and the kernel code that handles those requests.
+
+The objectives were to boot xv6, use its shell, distinguish userspace from
+kernel code, locate system-call handlers, and add a working user program.
+Commands were executed in the Ubuntu terminal and inside the xv6 shell.
+The figures are the student's captured outputs, and the program listing
+matches the source displayed in the VM.
+
+\chapter{Build environment and boot}
+The xv6 source tree was obtained in \code{~/xv6-riscv}. The build environment
+uses a RISC-V cross-compiler to generate code for the emulated machine.
+
+\section{Source tree and toolchain}
+The directory listing contains \code{kernel}, \code{user}, \code{mkfs},
+\code{Makefile}, and \code{README}. The tool check located
+\code{/usr/bin/riscv64-linux-gnu-gcc}, while the alternative
+\code{riscv64-unknown-elf-gcc} check produced no path. QEMU reported version
+10.2.1. The header \code{user/user.h} declared \code{int pause(int);}
+at line 25, establishing the system-call name required by this checkout.
+Figure~\ref{fig:setup} records the checks.
+\screenshot{L2_01_setup.png}{Source tree, compiler path, QEMU version, and pause declaration}{fig:setup}
+
+\section{Booting in QEMU}
+The command \code{make qemu} launched the kernel. The console printed
+\code{xv6 kernel is booting}, messages from additional harts, and
+\code{init: starting sh} before displaying the shell prompt.
+A hart is a RISC-V hardware thread. Figure~\ref{fig:boot} demonstrates
+successful booting. This capture was made after the initial build, so it
+shows the launch command rather than a fresh compilation transcript.
+\screenshot{L2_02_boot.png}{xv6 boot messages and interactive shell}{fig:boot}
+
+\chapter{Using xv6 as a Unix system}
+The shell provides a small set of familiar Unix programs. Their outputs
+demonstrate basic file operations and communication between processes.
+
+\section{Included programs and file contents}
+Three supplied programs are \code{ls}, which lists directory entries;
+\code{cat}, which reads file contents; and \code{echo}, which prints its
+arguments. The directory listing also includes \code{grep}, \code{wc},
+\code{mkdir}, and \code{sh}. Figure~\ref{fig:programs} shows the listing
+and the opening part of the README. The README output is an excerpt,
+whereas the separate word-count command operates on the entire file.
+\screenshot{L2_03_programs.png}{Included xv6 programs and an excerpt of README}{fig:programs}
+
+\section{Pipelines and shell comparison}
+The command \code{echo hello xv6} printed \code{hello xv6}.
+The pipeline \code{ls | grep c} produced entries for \code{cat},
+\code{echo}, \code{wc}, \code{sync}, and \code{console}.
+The command \code{wc README} printed \code{48 336 2441 README}, representing
+48 lines, 336 words, and 2441 bytes. Figure~\ref{fig:shell} records these
+results.
+
+A pipeline needs process creation and execution, together with interprocess
+communication. Separate processes can be started with \code{fork} and
+\code{exec}; a kernel pipe transports bytes through file descriptors from
+one program's standard output to another's standard input. The xv6 shell
+supports familiar execution and pipes, but provides fewer conveniences than
+the Linux shell used in Lab 1.
+\screenshot[0.75\textwidth]{L2_04_shell.png}{Output, pipeline filtering, and README counts}{fig:shell}
+
+\chapter{Reading userspace and kernel source}
+The source tree separates ordinary programs in \code{user/} from privileged
+OS code in \code{kernel/}. This distinction makes it possible to trace
+a request from a user program to its kernel implementation.
+
+\section{User programs and system calls}
+The first 40 lines of \code{user/ls.c} show its includes, filename-formatting
+helper, and the opening of a path. The complete \code{user/cat.c} listing
+shows how bytes are read into a buffer and written to standard output.
+Figures~\ref{fig:ls-source} and~\ref{fig:cat-source} record the inspected code.
+\screenshot{L2_05_source_ls.png}{Beginning of the xv6 directory-listing program}{fig:ls-source}
+\screenshot{L2_06_source_cat.png}{Complete source of the xv6 cat program}{fig:cat-source}
+
+Table~\ref{tab:calls} identifies the direct system calls visible in
+\code{cat.c}. With no file arguments, the program reads standard input,
+descriptor 0. Its output goes to descriptor 1.
+\begin{table}[H]
+\caption{System calls used by the cat program}\label{tab:calls}
+\centering
+\begin{tabularx}{\textwidth}{|l|Y|}\hline
+\textbf{Call} & \textbf{Request to the kernel}\\\hline
+\code{open} & Open an input pathname and obtain a descriptor.\\\hline
+\code{read} & Transfer input bytes into the userspace buffer.\\\hline
+\code{write} & Transfer bytes from the buffer to standard output.\\\hline
+\code{close} & Release the opened descriptor.\\\hline
+\code{exit} & Terminate the process with a success or error status.\\\hline
+\end{tabularx}
+\end{table}
+The function \code{fprintf} formats output in userspace; it is not itself
+a system call, although its output ultimately uses \code{write}.
+Figure~\ref{fig:declarations} shows the system-call declarations followed by
+userspace library declarations in \code{user/user.h}.
+\screenshot{L2_07_syscall_declarations.png}{System-call interface and userspace library declarations}{fig:declarations}
+
+\section{Kernel handlers and privilege separation}
+In the inspected checkout, \code{sys_read(void)} is at line 69 of
+\code{kernel/sysfile.c}; its return type appears on line 68.
+The handler retrieves arguments, checks the file descriptor, and calls
+\code{fileread}. The handler \code{sys_write(void)} is at line 83 and calls
+\code{filewrite}. Figure~\ref{fig:handlers} records both implementations.
+These line numbers refer to the captured source version.
+
+The code in \code{kernel/} runs with privilege to manage resources and
+implement OS services, while the code in \code{user/} runs as ordinary
+programs and requests those services through system calls.
+\screenshot{L2_08_syscall_kernel.png}{Kernel implementations of read and write}{fig:handlers}
+
+\chapter{Implementing and testing sleep}
+The new program pauses for a requested number of clock ticks and returns to
+the shell. Its executable name is \code{sleep}, while its kernel request
+uses the \code{pause} interface declared by this checkout.
+
+\section{Program source and version adaptation}
+The handout's example calls \code{sleep(atoi(argv[1]))}. The inspected
+\code{user/user.h} declares \code{pause} instead, so the implementation
+calls \code{pause(atoi(argv[1]))}. This adapts the system-call name while
+preserving the executable and usage syntax required by the exercise.
+
+The program requires exactly one command-line argument. Otherwise it prints
+\code{usage: sleep <ticks>} to standard error and calls \code{exit(1)}.
+For a valid argument count, \code{atoi} converts the argument to an integer,
+\code{pause} requests the delay, and \code{exit(0)} terminates the program.
+The source is shown below and in Figure~\ref{fig:sleep-source}.
+\lstinputlisting[language=C]{user/sleep.c}
+\screenshot{L2_09_sleep_code.png}{Creating and displaying the sleep source in the VM}{fig:sleep-source}
+
+\section{Build registration}
+The executable was added to the \code{UPROGS} list as follows:
+\begin{lstlisting}
+  $U/_sync\
+  $U/_sleep\
+
+fs.img: mkfs/mkfs README $(UPROGS)
+\end{lstlisting}
+The actual Makefile entries use tab indentation. A blank line is preserved
+before \code{fs.img:} because the final list entry ends with a continuation
+backslash. Figure~\ref{fig:makefile} records an earlier edit in which this
+separator had been removed; that capture is not a representation of the
+correct final layout. The repository includes \code{Makefile.patch} with
+the intended registration and separator.
+\screenshot{L2_10_makefile.png}{Earlier Makefile edit before restoring the blank separator}{fig:makefile}
+
+\section{Observed runtime results}
+The runtime sequence printed \code{before}, ran \code{sleep 10}, and then
+printed \code{after}. The valid call returned to the shell without an error
+message. Running \code{sleep} without arguments printed the usage message.
+Figure~\ref{fig:sleep-test} shows these results and an earlier failed
+extra-argument attempt.
+\screenshot[0.60\textwidth]{L2_11_sleep_test.png}{Valid call, missing-argument check, and earlier failed attempt}{fig:sleep-test}
+
+The repeated command \code{sleep 10 20} printed
+\code{usage: sleep <ticks>}, as shown in Figure~\ref{fig:extra-args}.
+Both invalid argument counts therefore produced the expected message.
+The earlier \code{exec sleep failed} result was superseded by this successful
+repeat; its cause was not established by the captures.
+\screenshot[0.55\textwidth]{fixed2.png}{Successful extra-argument usage check}{fig:extra-args}
+
+The screenshots show execution and argument-count handling, but do not
+measure the pause duration or expose exit statuses. No independent rebuild
+was performed from this report repository because it contains the user
+program and registration patch rather than the full xv6 source tree.
+
+\utmconclusions
+xv6 booted successfully in QEMU and provided working file-reading, output,
+and pipeline commands. Inspecting both \code{user/cat.c} and
+\code{kernel/sysfile.c} connected the user-level read and write requests
+with their privileged kernel handlers.
+
+The added \code{sleep} program uses the checkout's \code{pause} system
+call and is accompanied by a build-registration patch. The captured runtime
+results show a valid call returning and the expected usage messages for
+missing and extra arguments. The repository containing the reports,
+screenshots, and program is \expandafter\url\expandafter{\CourseRepository}.
+
+\reportreferences{Lab 2: Meet the OS You Will Build, Track B}
+  {L2_FAF-24x_Xxxxx Xxxxxx.docx}
+\end{document}
