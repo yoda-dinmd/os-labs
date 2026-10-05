@@ -44,9 +44,12 @@ Ubuntu VM. Figures throughout the report are the student's captured outputs.
 The VM uses account \code{victor}, hostname \code{oscourse}, and the
 \code{7.0.0-34-generic} Linux kernel on x86-64. The initial capture shows seven
 minutes of uptime. The work directory was \path{/home/victor/os-lab1}.
-Figure~\ref{fig:environment} records the environment. Later measurements were
+The screenshot below records the environment. Later measurements were
 taken in separate sessions and should not be interpreted as simultaneous.
-\screenshot{L1_01_environment.png}{Ubuntu account, kernel, and uptime}{fig:environment}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth,height=0.62\textheight,keepaspectratio]{screenshots/L1_01_environment.png}
+\end{figure}
 
 \chapter{File and directory management}
 The filesystem presents data as a hierarchy of named objects. This part
@@ -195,7 +198,4 @@ kernel-exposed process state, and the association between a mounted
 filesystem and its device. Process counts and memory use varied between
 captures, as expected for a running system. All reported measurements are
 taken from the supplied terminal screenshots.
-
-\reportreferences{Lab 1: The OS as a Resource Manager, Track A}
-  {L1_FAF-24x_Xxxxx Xxxxxx.docx}
 \end{document}
