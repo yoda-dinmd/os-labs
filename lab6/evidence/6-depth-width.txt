@@ -1,0 +1,54 @@
+$ mkdir deep
+$ mkdir deep/d
+$ mkdir deep/d/d
+$ mkdir deep/d/d/d
+$ mkdir deep/d/d/d/d
+$ mkdir deep/d/d/d/d/d
+$ mkdir deep/d/d/d/d/d/d
+$ mkdir deep/d/d/d/d/d/d/d
+$ mkdir deep/d/d/d/d/d/d/d/d
+$ mkdir deep/d/d/d/d/d/d/d/d/d
+$ mkdir deep/d/d/d/d/d/d/d/d/d/d
+$ mkdir deep/d/d/d/d/d/d/d/d/d/d/d
+$ mkdir deep/d/d/d/d/d/d/d/d/d/d/d/d
+$ mkdir deep/d/d/d/d/d/d/d/d/d/d/d/d/d
+$ mkdir deep/d/d/d/d/d/d/d/d/d/d/d/d/d/d
+$ mkdir deep/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d
+$ mkdir deep/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d
+$ mkdir deep/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d
+$ mkdir deep/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d
+$ echo deep > deep/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/needle
+$ find deep needle
+deep/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/needle
+$ find deep needle -n
+deep/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/needle 53
+$ mkdir wide
+$ mkdir wide/d0
+$ mkdir wide/d1
+$ mkdir wide/d2
+$ mkdir wide/d3
+$ mkdir wide/d4
+$ mkdir wide/d5
+$ mkdir wide/d6
+$ mkdir wide/d7
+$ mkdir wide/d8
+$ mkdir wide/d9
+$ mkdir wide/d10
+$ mkdir wide/d11
+$ mkdir wide/d12
+$ mkdir wide/d13
+$ mkdir wide/d14
+$ mkdir wide/d15
+$ mkdir wide/d16
+$ mkdir wide/d17
+$ mkdir wide/d18
+$ mkdir wide/d19
+$ mkdir wide/d20
+$ mkdir wide/d21
+$ mkdir wide/d22
+$ mkdir wide/d23
+$ echo wide > wide/d23/needle
+$ find wide needle
+wide/d23/needle
+$ find wide needle
+wide/d23/needle

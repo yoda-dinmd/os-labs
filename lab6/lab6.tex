@@ -1,0 +1,421 @@
+\documentclass{../latex/utmreport}
+\newcommand{\ReportTitle}{Lab 6: Inside the xv6 File System}
+\input{../latex/report-common.tex}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\begin{document}
+\makeutmreporttitlepage
+\tableofcontents
+\clearpage
+\begin{utmabstract}[Abstract]
+This laboratory examines the on-disk structures and visible behaviour of the xv6 filesystem. Two user programs expose inode metadata and recursively search directory trees. Fresh-image experiments demonstrate hard links, fixed-length names, directory entry sizes and inode identity. Source inspection explains block reclamation and storage limits, while traversal tests exercise descriptor management and the optional inode display.
+\utmkeywords{xv6, inode, directory, hard link, recursive traversal, filesystem}
+\end{utmabstract}
+\utmintroduction
+
+This laboratory examines directory entries, inode metadata, hard links
+and storage limits in xv6. Two user programs were implemented:
+\texttt{mystat}, which prints inode information, and \texttt{find},
+which recursively searches by the last pathname component. The optional
+\texttt{-n} form of \texttt{find} also prints inode numbers.
+
+The work uses the same course revision as Lab 4,
+{\small\texttt{06aad25c735fd3159bdfae5680be4eab7b1668b2}}, with the RISC-V GCC
+toolchain and QEMU on openSUSE Tumbleweed. A separate working copy was
+built from \texttt{\textasciitilde{}/xv6-riscv}. Both experiments began
+with freshly built filesystem images: the first covers inspection and
+link removal, and the second contains the exact directory tree
+prescribed for \texttt{find}. QEMU was exited with Ctrl-A followed by X
+between runs.
+
+The source files are submitted as \texttt{user/mystat.c} and
+\texttt{user/find.c}, together with the full Makefile and a focused
+Makefile patch. The command transcripts and relevant kernel-source
+excerpts are retained in \texttt{evidence/}.
+
+\chapter{Reading the filesystem
+listing}\label{reading-the-filesystem-listing}
+
+\section{File types and root
+identity}\label{file-types-and-root-identity}
+
+The first \texttt{ls} produced the following selected entries:
+
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}
+$ ls
+.              1 1 1024
+..             1 1 1024
+README         2 2 2441
+cat            2 7 35368
+console        3 27 0
+\end{lstlisting}
+\end{minipage}\par\medskip
+
+The columns are name, type, inode number and size in bytes.
+\texttt{kernel/stat.h} defines \textbf{1 as a directory}
+(\texttt{T\_DIR}), \textbf{2 as a regular file} (\texttt{T\_FILE}) and
+\textbf{3 as a device} (\texttt{T\_DEVICE}). The console is therefore a
+device inode rather than a regular file holding console contents.
+
+The root directory has inode \textbf{1}, matching \texttt{ROOTINO} in
+\texttt{kernel/fs.h}. At root, \texttt{.} denotes the current directory
+and \texttt{..} denotes its parent, which is root itself. Both therefore
+identify inode 1. The executable and console inode numbers depend on the
+files included in the image; the handout's sample numbers are not fixed
+requirements.
+
+\section{An empty directory}\label{an-empty-directory}
+
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}
+$ mkdir a
+$ ls a
+.              1 28 32
+..             1 1 1024
+$ mystat a
+a: directory, inode 28, links 1, size 32 bytes
+\end{lstlisting}
+\end{minipage}\par\medskip
+
+A directory entry consists of a two-byte \texttt{ushort\ inum} and a
+14-byte name array, so \texttt{sizeof(struct\ dirent)} is \textbf{16
+bytes}. Directory \texttt{a} contains two entries, \texttt{.} and
+\texttt{..}, accounting for \texttt{2\ *\ 16\ =\ 32} bytes. Its
+\texttt{.} entry identifies inode 28, and \texttt{..} identifies the
+parent, inode 1. The 1024 displayed beside \texttt{..} is the parent
+directory's size, not the length of that single entry.
+
+\chapter{Implementing mystat and observing hard
+links}\label{implementing-mystat-and-observing-hard-links}
+
+\section{Interface and error
+handling}\label{interface-and-error-handling}
+
+\texttt{mystat} loops over every pathname operand and calls the
+user-library \texttt{stat} function. Its type helper maps the three
+defined types to \texttt{directory}, \texttt{file} and \texttt{device},
+returning \texttt{?} for an unknown value. Successful calls print the
+requested name, type, inode number, link count and size. Size is printed
+with \texttt{\%lu}, supported by this revision's \texttt{user/printf.c},
+preserving the \texttt{uint64} value in \texttt{struct\ stat}.
+
+A failed lookup prints a diagnostic to descriptor 2 and processing
+continues with later operands. The program exits with status 1 if any
+lookup failed, and status 0 otherwise. Calling it without operands
+prints a usage message and exits with status 1. This extends the
+handout's basic loop with useful argument and failure reporting.
+
+The Makefile retains the earlier user utilities and adds tab-indented
+continuation lines for \texttt{\$U/\_mystat} and \texttt{\$U/\_find} in
+\texttt{UPROGS}. A clean build of \texttt{kernel/kernel} and
+\texttt{fs.img} completed successfully.
+
+\section{Metadata before and after
+linking}\label{metadata-before-and-after-linking}
+
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}
+$ mystat README . console
+README: file, inode 2, links 1, size 2441 bytes
+.: directory, inode 1, links 2, size 1024 bytes
+console: device, inode 27, links 1, size 0 bytes
+$ ln README r2
+$ mystat README r2
+README: file, inode 2, links 2, size 2441 bytes
+r2: file, inode 2, links 2, size 2441 bytes
+$ rm README
+$ mystat r2
+r2: file, inode 2, links 1, size 2441 bytes
+$ cat r2 | wc
+48 336 2441
+\end{lstlisting}
+\end{minipage}\par\medskip
+
+Creating \texttt{r2} adds a second directory entry pointing to inode 2
+and increases its link count from 1 to 2. Removing \texttt{README}
+decreases the count to 1. The remaining name still identifies inode 2,
+the file remains 2441 bytes long, and its contents remain readable:
+\texttt{wc} counted 48 lines, 336 words and 2441 bytes. A hard link does
+not copy the data.
+
+Root's link count is 2 in this run because \texttt{mkdir\ a} already
+added a child directory. This differs from the handout's initial example
+with link count 1. xv6 deliberately does not count a directory's own
+\texttt{.} entry as a separate link; directory creation increases the
+parent's count for the child's \texttt{..} entry. Therefore an empty xv6
+directory has link count 1 even though it contains two directory
+entries.
+
+Error handling was also observed:
+
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}
+$ mystat missing r2
+mystat: cannot stat missing
+r2: file, inode 2, links 1, size 2441 bytes
+$ mystat
+usage: mystat <path> [path ...]
+\end{lstlisting}
+\end{minipage}\par\medskip
+
+\section{Unlinking and freeing
+blocks}\label{unlinking-and-freeing-blocks}
+
+In the pinned \texttt{kernel/sysfile.c}, the file's link count is
+decremented by \textbf{\texttt{ip-\textgreater{}nlink-\/-;} at line 244}
+in \texttt{sys\_unlink}. The following \texttt{iupdate(ip)} persists the
+inode metadata. The earlier \texttt{dp-\textgreater{}nlink-\/-} at line
+239 instead updates a parent when a directory is removed; these two
+counters must not be confused.
+
+The file's data blocks are freed only after its link count is zero and
+its final in-memory reference is being released. In
+\texttt{kernel/fs.c}, \texttt{iput} tests
+\texttt{ip-\textgreater{}ref\ ==\ 1\ \&\&\ ip-\textgreater{}valid\ \&\&\ ip-\textgreater{}nlink\ ==\ 0}
+at line 357, then calls \texttt{itrunc(ip)} at line 365. \texttt{itrunc}
+frees direct data blocks, indirect data blocks and the indirect-address
+block. This revision then calls \texttt{ifree} to make the inode
+reusable. An open descriptor can delay this reclamation after the last
+directory name has been removed. After only \texttt{rm\ README}, the
+surviving \texttt{r2} link already prevents reclamation.
+
+\section{What an on-disk inode
+stores}\label{what-an-on-disk-inode-stores}
+
+\texttt{struct\ dinode} in \texttt{kernel/fs.h} contains:
+
+{
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{0.47\linewidth}
+  >{\raggedright\arraybackslash}p{0.47\linewidth}@{}}
+\hline
+\begin{minipage}[b]{\linewidth}\raggedright
+Field
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Meaning
+\end{minipage} \\
+\hline
+\endhead
+\hline
+\endlastfoot
+\texttt{short\ type} & Directory, regular file, device, or unused
+inode \\
+\texttt{short\ major} & Device major number, for a device inode \\
+\texttt{short\ minor} & Device minor number, for a device inode \\
+\texttt{short\ nlink} & Number of counted directory links \\
+\texttt{uint\ size} & Logical size in bytes \\
+\texttt{uint\ addrs{[}NDIRECT\ +\ 1{]}} & Twelve direct addresses and
+one indirect-block address \\
+\end{longtable}
+}
+
+The structure occupies 64 bytes: four two-byte fields, one four-byte
+size and thirteen four-byte addresses. A filename lives in a directory
+entry, not in this inode. This xv6 revision has no inode ownership, Unix
+permission-mode fields, timestamps or symbolic-link type. The
+\texttt{dev} and \texttt{ino} reported by \texttt{struct\ stat} identify
+an inode's location; they are not fields stored inside
+\texttt{struct\ dinode}.
+
+\chapter{Measuring filesystem limits}\label{measuring-filesystem-limits}
+
+\section{Fixed-size names}\label{fixed-size-names}
+
+The constants in \texttt{kernel/fs.h} are \texttt{BSIZE\ =\ 1024},
+\texttt{NDIRECT\ =\ 12}, \texttt{NINDIRECT\ =\ BSIZE\ /\ sizeof(uint)}
+and \texttt{DIRSIZ\ =\ 14}.
+
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}
+$ mkdir averyveryverylongname
+$ ls
+averyveryveryl 1 29 32
+$ mystat averyveryverylongname averyveryveryl
+averyveryverylongname: directory, inode 29, links 1, size 32 bytes
+averyveryveryl: directory, inode 29, links 1, size 32 bytes
+\end{lstlisting}
+\end{minipage}\par\medskip
+
+The \texttt{ls} excerpt selects the newly created directory. Its stored
+name is \textbf{\texttt{averyveryveryl}}, the first 14 characters.
+\texttt{DIRSIZ} explains the truncation. Path lookup likewise uses the
+first 14 characters of a component, so both spellings identify inode 29.
+A full-length 14-byte name need not contain a terminating NUL inside the
+directory entry, which matters when passing it to string functions.
+
+\section{Maximum file length}\label{maximum-file-length}
+
+One indirect block holds \texttt{1024\ /\ 4\ =\ 256} block addresses.
+Together with twelve direct blocks, the inode addresses 268 data blocks:
+
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}
+NINDIRECT = 1024 / 4 = 256
+MAXFILE   = 12 + 256 = 268 data blocks
+maximum   = 268 * 1024 = 274432 bytes = 268 KiB
+\end{lstlisting}
+\end{minipage}\par\medskip
+
+This is the structural maximum file-data length. The indirect-address
+block consumes another disk block but does not add to the file's logical
+contents. A nearly full disk may run out of free blocks before a file
+reaches this limit. The calculation follows the source constants; it is
+not a claim that a maximum-size file was written during this exercise.
+
+\section{Disk layout from mkfs}\label{disk-layout-from-mkfs}
+
+The clean build printed:
+
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}
+nmeta 47 (boot, super, log blocks 31, inode blocks 13, bitmap blocks 1) blocks 1953 total 2000
+balloc: first 1102 blocks have been allocated
+\end{lstlisting}
+\end{minipage}\par\medskip
+
+The disk contains \textbf{2000 blocks}, each 1024 bytes, for
+\textbf{2,048,000 bytes} overall. Its contiguous layout is:
+
+{
+\begin{table}[H]
+\centering
+\caption{Filesystem image layout}
+\begin{tabular}{lll}
+\hline
+Region & Block numbers & Block count \\
+\hline
+
+
+Boot & 0 & 1 \\
+Superblock & 1 & 1 \\
+Log & 2--32 & 31 \\
+Inodes & 33--45 & 13 \\
+Free-block bitmap & 46 & 1 \\
+Data area & 47--1999 & 1953 \\
+\end{tabular}
+\end{table}
+}
+
+The metadata total is \texttt{1\ +\ 1\ +\ 31\ +\ 13\ +\ 1\ =\ 47};
+\texttt{2000\ -\ 47\ =\ 1953} blocks remain in the data region. The log
+allocation includes its header. The 1953 data-area blocks are not all
+initially free: the root directory, README, executables and any
+indirect-address blocks already occupy part of them. Immediately after
+this build, the first 1102 disk blocks were marked allocated, leaving
+898 blocks unallocated before the boot-time and user-created changes.
+
+\chapter{Implementing and testing
+find}\label{implementing-and-testing-find}
+
+\section{Traversal and resource
+handling}\label{traversal-and-resource-handling}
+
+\texttt{find\ \textless{}dir\textgreater{}\ \textless{}name\textgreater{}}
+compares the final component of each visited pathname with the requested
+name using \texttt{strcmp}. A matching directory is printed as well as
+searched, and a matching regular file is printed without being
+traversed. A starting file operand is also accepted. Trailing slashes on
+the starting pathname are normalized except at root.
+
+For a directory, the program reads fixed-size \texttt{struct\ dirent}
+records, skips entries with \texttt{inum\ ==\ 0}, and excludes
+\texttt{.} and \texttt{..} from recursion. Each name is copied into a
+\texttt{DIRSIZ\ +\ 1} buffer and explicitly NUL-terminated. Child paths
+include a separator only when required, and paths exceeding the 512-byte
+buffer policy, including the terminator, produce a diagnostic.
+
+Before recursion, the names are retained in a heap-allocated linked list
+and the directory descriptor is closed. Child pathnames are also
+allocated on the heap and freed after use. This avoids retaining one
+open descriptor per ancestor: xv6's \texttt{NOFILE} limit is 16, with
+standard descriptors already occupying three slots. Directory read
+errors, failed lookup/open calls and allocation failures are reported to
+standard error and result in a nonzero final status.
+
+The traversal targets the stable directory trees in this experiment. Its
+name snapshot is not an atomic filesystem snapshot; concurrent renames
+can cause lookup errors. Recursion still consumes the finite xv6 user
+stack, so the program does not claim unlimited depth.
+
+\section{Required test on a fresh
+image}\label{required-test-on-a-fresh-image}
+
+After exiting QEMU, \texttt{make\ clean} and a new build created a fresh
+image, removing the earlier README-link experiment. The required
+commands then produced:
+
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}
+$ mkdir a
+$ mkdir a/b
+$ echo x > a/b/r2
+$ echo y > a/r2
+$ ln cat r2
+$ find . r2
+./a/b/r2
+./a/r2
+./r2
+$ find a b
+a/b
+\end{lstlisting}
+\end{minipage}\par\medskip
+
+All three matching files were found, and searching for \texttt{b} found
+the matching directory. Excluding \texttt{.} and \texttt{..} prevents
+cycling back to ancestors. The two nested files each contain a letter
+and newline, while the root \texttt{r2} is a hard link to the executable
+\texttt{cat}.
+
+\section{Optional inode numbers}\label{optional-inode-numbers}
+
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}
+$ find . r2 -n
+./a/b/r2 30
+./a/r2 31
+./r2 7
+$ mystat cat r2 a/r2 a/b/r2
+cat: file, inode 7, links 2, size 35368 bytes
+r2: file, inode 7, links 2, size 35368 bytes
+a/r2: file, inode 31, links 1, size 2 bytes
+a/b/r2: file, inode 30, links 1, size 2 bytes
+\end{lstlisting}
+\end{minipage}\par\medskip
+
+Only \textbf{\texttt{./r2}} is the same file as \texttt{cat}: both
+identify inode 7 and report two links. The other two paths have distinct
+inodes, 30 and 31, even though all three last components are named
+\texttt{r2}.
+
+\section{Additional checks}\label{additional-checks}
+
+A missing path produced \texttt{find:\ cannot\ stat\ missing}; invalid
+argument counts and an unknown fourth argument produced the usage
+message. A nonexistent target name produced no match lines. The
+following cases also succeeded: \texttt{find\ a/\ r2},
+\texttt{find\ a/r2\ r2}, \texttt{find\ /a\ r2}, a directory with a full
+14-character name, and a directory containing a slot freed by removing a
+file.
+
+A deeper tree contained 19 nested directories, exceeding the per-process
+descriptor count. Both ordinary and inode-number searches reached its
+\texttt{needle} file without an open failure. A second tree contained 24
+sibling directories; repeated searches found \texttt{wide/d23/needle}.
+These results support the descriptor-closing strategy and the handling
+of both deep and wide trees. Full commands and output are retained in
+\texttt{evidence/5-edge-cases.txt} and
+\texttt{evidence/6-depth-width.txt}.
+
+\utmconclusions
+
+The listing and \texttt{mystat} results connect names to inode
+identities and link counts. Removing one hard link leaves the inode and
+its contents reachable through another, while source inspection explains
+when the final unlink can reclaim storage. The filesystem constants
+account for 14-byte names, 16-byte directory entries and a 268 KiB
+maximum file size. Finally, \texttt{find} turns the directory-entry
+representation into a working recursive traversal, and its inode display
+distinguishes equal names from references to the same file.
+
+\reportreferences{Lab 6: Inside the xv6 File System}{OS_2026_-_Lab_6_-_Inside_the_xv6_File_System.docx}
+\end{document}

@@ -1,0 +1,3 @@
+Earlier ordinary-user check on the same host, 12 October 2026:
+$ cat /etc/shadow
+cat: /etc/shadow: Permission denied

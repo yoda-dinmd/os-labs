@@ -1,0 +1,2 @@
+Linux localhost.localdomain 7.2.7-1-default #1 SMP PREEMPT_DYNAMIC Tue Sep 22 08:00:24 UTC 2026 (e601a2d) x86_64 x86_64 x86_64 GNU/Linux
+Working directory: /home/victor/os-lab5/run-018y4c78

@@ -12,7 +12,7 @@ Repository: [yoda-dinmd/os-labs](https://github.com/yoda-dinmd/os-labs).
 ```text
 README.md
 metadata.tex             # Shared name, group, course, and instructor
-build-reports.sh         # Compile both reports with Tectonic
+build-reports.sh         # Compile reports with Tectonic
 build/
   lab1.pdf
   lab2.pdf
@@ -32,7 +32,7 @@ lab4/
   lab4.md
 ```
 
-Labs 1 and 2 share a directory. Add subsequent labs as `lab5/lab5.md`, and so on when assigned; the final lab number is not yet known. All commits go directly to `main`.
+Labs 1 and 2 share a directory. Labs 5 and 6 use `lab5/report.md` and `lab6/notes.md`; the final lab number is not yet known. All commits go directly to `main`.
 
 ## Reports
 
@@ -48,7 +48,7 @@ Reports use observed values from 23 supplied screenshots. Lab 2 booting and exec
 
 ## Compile the PDF reports
 
-Edit [metadata.tex](metadata.tex) to update personal or course details shared by both reports. From the repository root, run:
+Edit [metadata.tex](metadata.tex) to update personal or course details shared by all reports. From the repository root, run:
 
 ```bash
 bash build-reports.sh
@@ -82,3 +82,25 @@ sleep 10 20
 ```
 
 Both invalid argument counts should print `usage: sleep <ticks>`. Save the output as `lab1&2/screenshots/L2_11_sleep_test.png`. Exit QEMU with Ctrl+A, then X.
+
+## Labs 5 and 6
+
+- [Lab 5 report](lab5/report.md) · [LaTeX](lab5/lab5.tex) · [PDF](build/lab5.pdf)
+- [Lab 6 report](lab6/notes.md) · [LaTeX](lab6/lab6.tex) · [PDF](build/lab6.pdf)
+
+Lab 5 records the Linux filesystem experiments, including the actual Btrfs
+directory link counts and the optional gzip/open-file exercises. Lab 6 includes
+`mystat`, recursive `find`, optional `find -n`, and fresh-image QEMU results.
+Both PDFs use the shared `metadata.tex` and existing UTM layout.
+
+To run Lab 6, use xv6 revision `06aad25c735fd3159bdfae5680be4eab7b1668b2`
+with the Lab 4 setup. Copy `lab6/user/mystat.c` and `lab6/user/find.c` to its
+`user/` directory, then apply `lab6/Makefile.patch` from the xv6 root. The full
+`lab6/Makefile` is also supplied and retains the earlier `args` and `sleep`
+registrations. For a clean checkout, copy all four files from `lab6/user/`
+and the full `lab6/Makefile`; the included `args.c` and `sleep.c` supply those
+earlier utilities. Run `make qemu`; exit with Ctrl+A, then X.
+
+`make clean` rebuilds the filesystem image and discards its previous contents.
+Use a separate checkout for the fresh-disk experiments. The reports include
+commands and output; full transcripts are under each lab's `evidence/`.

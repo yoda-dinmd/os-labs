@@ -1,0 +1,23 @@
++ gzip -c /etc/passwd
++ file notes.txt
+notes.txt: gzip compressed data, was "passwd", last modified: Mon Oct  5 11:07:33 2026, from Unix, original size modulo 2^32 2202
++ xxd notes.txt
++ head -1
+00000000: 1f8b 0808 f584 c36a 0003 7061 7373 7764  .......j..passwd
++ printf 'open file remains readable\n'
++ exec
++ rm bigfile
++ ls -l /proc/842399/fd
+total 0
+lr-x------. 1 victor victor 64 Oct 12 16:10 0 -> pipe:[4160649]
+l-wx------. 1 victor victor 64 Oct 12 16:10 1 -> pipe:[4160650]
+l-wx------. 1 victor victor 64 Oct 12 16:10 2 -> pipe:[4160650]
+lr-x------. 1 victor victor 64 Oct 12 16:10 3 -> /home/victor/os-lab5/run-018y4c78/bigfile (deleted)
++ cat
+open file remains readable
++ exec
++ ls -l /proc/842399/fd
+total 0
+lr-x------. 1 victor victor 64 Oct 12 16:10 0 -> pipe:[4160649]
+l-wx------. 1 victor victor 64 Oct 12 16:10 1 -> pipe:[4160650]
+l-wx------. 1 victor victor 64 Oct 12 16:10 2 -> pipe:[4160650]

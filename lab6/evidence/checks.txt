@@ -1,0 +1,6 @@
+PASS: hard-link transitions and continued stat after missing operand
+PASS: required find paths and optional inode output
+PASS: usage, missing path, no match, file operand, trailing slash, absolute path
+PASS: 14-byte name and deleted directory slot
+PASS: 19 nested directories (more than 16 descriptor slots)
+PASS: 24 sibling directories and repeated traversal

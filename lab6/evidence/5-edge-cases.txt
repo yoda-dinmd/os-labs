@@ -1,0 +1,30 @@
+$ find
+usage: find <dir> <name> [-n]
+$ find . r2 -z
+usage: find <dir> <name> [-n]
+$ find missing r2
+find: cannot stat missing
+$ find a/ r2
+a/b/r2
+a/r2
+$ find a/r2 r2
+a/r2
+$ find a notpresent
+$ mkdir a/abcdefghijklmn
+$ echo z > a/abcdefghijklmn/r2
+$ echo t > a/remove
+$ rm a/remove
+$ find a abcdefghijklmn
+a/abcdefghijklmn
+$ find a r2
+a/b/r2
+a/r2
+a/abcdefghijklmn/r2
+$ find /a r2
+/a/b/r2
+/a/r2
+/a/abcdefghijklmn/r2
+$ mystat missing a console
+mystat: cannot stat missing
+a: directory, inode 28, links 3, size 96 bytes
+console: device, inode 27, links 1, size 0 bytes

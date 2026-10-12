@@ -1,0 +1,253 @@
+$ cat kernel/stat.h
+#define T_DIR    1 // Directory
+#define T_FILE   2 // File
+#define T_DEVICE 3 // Device
+
+struct stat {
+  int dev;     // File system's disk device
+  uint ino;    // Inode number
+  short type;  // Type of file
+  short nlink; // Number of links to file
+  uint64 size; // Size of file in bytes
+};
+
+$ cat kernel/fs.h
+// On-disk file system format.
+// Both the kernel and user programs use this header file.
+
+#define ROOTINO 1    // root i-number
+#define BSIZE   1024 // block size
+
+// Disk layout:
+// [ boot block | super block | log | inode blocks |
+//                                          free bit map | data blocks]
+//
+// mkfs computes the super block and builds an initial file system. The
+// super block describes the disk layout:
+struct superblock {
+  uint magic;      // Must be FSMAGIC
+  uint size;       // Size of file system image (blocks)
+  uint nblocks;    // Number of data blocks
+  uint ninodes;    // Number of inodes.
+  uint nlog;       // Number of log blocks
+  uint logstart;   // Block number of first log block
+  uint inodestart; // Block number of first inode block
+  uint bmapstart;  // Block number of first free map block
+};
+
+#define FSMAGIC 0x10203040
+
+#define NDIRECT   12
+#define NINDIRECT (BSIZE / sizeof(uint))
+#define MAXFILE   (NDIRECT + NINDIRECT)
+#define NLINK_MAX 32767 // nlink is a short; refuse links past its maximum
+
+// On-disk inode structure
+struct dinode {
+  short type;              // File type
+  short major;             // Major device number (T_DEVICE only)
+  short minor;             // Minor device number (T_DEVICE only)
+  short nlink;             // Number of links to inode in file system
+  uint size;               // Size of file (bytes)
+  uint addrs[NDIRECT + 1]; // Data block addresses
+};
+
+// Inodes per block.
+#define IPB (BSIZE / sizeof(struct dinode))
+
+// Block containing inode i
+#define IBLOCK(i, sb) ((i) / IPB + sb.inodestart)
+
+// Bitmap bits per block
+#define BPB (BSIZE * 8)
+
+// Block of free map containing bit for block b
+#define BBLOCK(b, sb) ((b) / BPB + sb.bmapstart)
+
+// Directory is a file containing a sequence of dirent structures.
+#define DIRSIZ 14
+
+// The name field may have DIRSIZ characters and not end in a NUL
+// character.
+struct dirent {
+  ushort inum;
+  char name[DIRSIZ] __attribute__((nonstring));
+};
+
+$ cat kernel/param.h
+#define NPROC       64                // maximum number of processes
+#define NCPU        8                 // maximum number of CPUs
+#define NOFILE      16                // open files per process
+#define NFILE       100               // open files per system
+#define NINODE      50                // maximum number of active i-nodes
+#define NDEV        10                // maximum major device number
+#define ROOTDEV     1                 // device number of file system root disk
+#define MAXARG      32                // max exec arguments
+#define MAXOPBLOCKS 10                // max # of blocks any FS op writes
+#define LOGBLOCKS   (MAXOPBLOCKS * 3) // max data blocks in on-disk log
+#define NBUF        (MAXOPBLOCKS * 3) // size of disk block cache
+#define FSSIZE      2000              // size of file system in blocks
+#define MAXPATH     128               // maximum file path name
+#define USERSTACK   1                 // user stack pages
+
+$ nl -ba kernel/sysfile.c (excerpt)
+205:   struct dirent de;
+206:   char name[DIRSIZ], path[MAXPATH];
+207:   uint off;
+208: 
+209:   if (argstr(0, path, MAXPATH) < 0)
+210:     return -1;
+211: 
+212:   begin_op();
+213:   if ((dp = nameiparent(path, name)) == 0) {
+214:     end_op();
+215:     return -1;
+216:   }
+217: 
+218:   ilock(dp);
+219: 
+220:   // Cannot unlink "." or "..".
+221:   if (namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
+222:     goto bad;
+223: 
+224:   if ((ip = dirlookup(dp, name, &off)) == 0)
+225:     goto bad;
+226:   ilock(ip);
+227: 
+228:   if (ip->nlink < 1)
+229:     panic("unlink: nlink < 1");
+230:   if (ip->type == T_DIR && !isdirempty(ip)) {
+231:     iunlockput(ip);
+232:     goto bad;
+233:   }
+234: 
+235:   memset(&de, 0, sizeof(de));
+236:   if (writei(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
+237:     panic("unlink: writei");
+238:   if (ip->type == T_DIR) {
+239:     dp->nlink--;
+240:     iupdate(dp);
+241:   }
+242:   iunlockput(dp);
+243: 
+244:   ip->nlink--;
+245:   iupdate(ip);
+246:   iunlockput(ip);
+247: 
+248:   end_op();
+249: 
+250:   return 0;
+251: 
+252: bad:
+$ nl -ba kernel/fs.c (excerpt)
+345: // If that was the last reference and the inode has no links
+346: // to it, free the inode (and its content) on disk.
+347: // All calls to iput() must be inside a transaction in
+348: // case it has to free the inode.
+349: void
+350: iput(struct inode *ip)
+351: {
+352:   acquire(&itable.lock);
+353: 
+354:   // Last reference of an unlinked inode?  Capture dev/inum before ref--,
+355:   // since once ref hits 0, ip may be recycled by a concurrent iget()
+356:   // for a different inum.
+357:   int last = (ip->ref == 1 && ip->valid && ip->nlink == 0);
+358:   uint dev = ip->dev, inum = ip->inum;
+359: 
+360:   if (last) {
+361:     // ip->ref == 1 means no other process can have ip locked.
+362:     acquiresleep(&ip->lock);
+363:     release(&itable.lock);
+364: 
+365:     itrunc(ip); // free the data blocks (type stays nonzero on disk)
+366:     ip->valid = 0;
+367: 
+368:     releasesleep(&ip->lock);
+369: 
+370:     acquire(&itable.lock);
+371:   }
+372: 
+373:   ip->ref--;
+374:   release(&itable.lock);
+375: 
+376:   if (last)
+377:     ifree(dev, inum); // now clear type on disk: inum becomes allocatable
+$ nl -ba kernel/fs.c (excerpt)
+464: itrunc(struct inode *ip)
+465: {
+466:   int i, j;
+467:   struct buf *bp;
+468:   uint *a;
+469: 
+470:   for (i = 0; i < NDIRECT; i++) {
+471:     if (ip->addrs[i]) {
+472:       bfree(ip->dev, ip->addrs[i]);
+473:       ip->addrs[i] = 0;
+474:     }
+475:   }
+476: 
+477:   if (ip->addrs[NDIRECT]) {
+478:     bp = bread(ip->dev, ip->addrs[NDIRECT]);
+479:     a = (uint *)bp->data;
+480:     for (j = 0; j < NINDIRECT; j++) {
+481:       if (a[j])
+482:         bfree(ip->dev, a[j]);
+483:     }
+484:     brelse(bp);
+485:     bfree(ip->dev, ip->addrs[NDIRECT]);
+486:     ip->addrs[NDIRECT] = 0;
+487:   }
+488: 
+489:   ip->size = 0;
+490:   iupdate(ip);
+491: }
+492: 
+493: // Copy stat information from inode.
+$ nl -ba kernel/sysfile.c (excerpt)
+285:     iunlockput(ip);
+286:     return 0;
+287:   }
+288: 
+289:   if ((ip = ialloc(dp->dev, type)) == 0) {
+290:     iunlockput(dp);
+291:     return 0;
+292:   }
+293: 
+294:   ilock(ip);
+295:   ip->major = major;
+296:   ip->minor = minor;
+297:   ip->nlink = 1;
+298:   iupdate(ip);
+299: 
+300:   if (type == T_DIR) { // Create . and .. entries.
+301:     // No ip->nlink++ for ".": avoid cyclic ref count.
+302:     if (dirlink(ip, ".", ip->inum) < 0 || dirlink(ip, "..", dp->inum) < 0)
+303:       goto fail;
+304:   }
+305: 
+306:   if (dirlink(dp, name, ip->inum) < 0)
+307:     goto fail;
+308: 
+309:   if (type == T_DIR) {
+310:     // now that success is guaranteed:
+311:     dp->nlink++; // for ".."
+312:     iupdate(dp);
+313:   }
+314: 
+315:   iunlockput(dp);
+316: 
+317:   return ip;
+318: 
+319: fail:
+320:   // something went wrong. de-allocate ip.
+321:   ip->nlink = 0;
+322:   iupdate(ip);
+323:   iunlockput(ip);
+324:   iunlockput(dp);
+325:   return 0;
+326: }
+327: 
+328: uint64
+329: sys_open(void)
+330: {

@@ -1,0 +1,11 @@
+--- a/Makefile
++++ b/Makefile
+@@ -133,6 +133,8 @@
+ 
+ UPROGS=\
+ 	$U/_args\
++	$U/_mystat\
++	$U/_find\
+ 	$U/_sleep\
+ 	$U/_cat\
+ 	$U/_echo\

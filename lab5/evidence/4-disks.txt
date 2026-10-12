@@ -1,0 +1,72 @@
++ lsblk
+NAME        MAJ:MIN RM   SIZE RO TYPE MOUNTPOINTS
+nvme0n1     259:0    0 931.5G  0 disk 
+├─nvme0n1p1 259:1    0   200M  0 part /boot/efi
+├─nvme0n1p2 259:2    0    16M  0 part 
+├─nvme0n1p3 259:3    0 243.3G  0 part 
+├─nvme0n1p4 259:4    0   846M  0 part 
+├─nvme0n1p5 259:5    0 685.2G  0 part /var
+│                                     /usr/local
+│                                     /srv
+│                                     /root
+│                                     /opt
+│                                     /home
+│                                     /.snapshots
+│                                     /
+└─nvme0n1p6 259:6    0     2G  0 part [SWAP]
++ lsblk -o NAME,TYPE,FSTYPE,SIZE,MOUNTPOINTS
+NAME        TYPE FSTYPE   SIZE MOUNTPOINTS
+nvme0n1     disk        931.5G 
+├─nvme0n1p1 part vfat     200M /boot/efi
+├─nvme0n1p2 part           16M 
+├─nvme0n1p3 part ntfs   243.3G 
+├─nvme0n1p4 part ntfs     846M 
+├─nvme0n1p5 part btrfs  685.2G /var
+│                              /usr/local
+│                              /srv
+│                              /root
+│                              /opt
+│                              /home
+│                              /.snapshots
+│                              /
+└─nvme0n1p6 part swap       2G [SWAP]
++ df -h
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p5  686G   80G  605G  12% /
+devtmpfs        7.7G     0  7.7G   0% /dev
+tmpfs           7.8G     0  7.8G   0% /dev/shm
+efivarfs        150K   89K   57K  61% /sys/firmware/efi/efivars
+tmpfs           3.1G  2.3M  3.1G   1% /run
+none            1.0M     0  1.0M   0% /run/credentials/systemd-journald.service
+/dev/nvme0n1p5  686G   80G  605G  12% /.snapshots
+/dev/nvme0n1p5  686G   80G  605G  12% /home
+/dev/nvme0n1p5  686G   80G  605G  12% /opt
+tmpfs           7.8G  1.8G  6.0G  23% /tmp
+/dev/nvme0n1p5  686G   80G  605G  12% /root
+/dev/nvme0n1p5  686G   80G  605G  12% /srv
+/dev/nvme0n1p5  686G   80G  605G  12% /usr/local
+/dev/nvme0n1p5  686G   80G  605G  12% /var
+/dev/nvme0n1p1  197M  134M   64M  68% /boot/efi
+tmpfs           1.6G  164K  1.6G   1% /run/user/1000
+none            1.0M     0  1.0M   0% /run/credentials/getty@tty1.service
++ mount
++ grep ' / '
+/dev/nvme0n1p5 on / type btrfs (rw,relatime,seclabel,ssd,discard=async,space_cache=v2,subvolid=303,subvol=/@/.snapshots/40/snapshot)
++ grep -c processor /proc/cpuinfo
+8
++ head -3 /proc/meminfo
+MemTotal:       16212804 kB
+MemFree:         1033936 kB
+MemAvailable:    7479348 kB
++ head -5 /proc/self/status
+Name:	head
+Umask:	0022
+State:	R (running)
+Tgid:	842397
+Ngid:	0
++ ls -l /proc/self/fd
+total 0
+lr-x------. 1 victor victor 64 Oct 12 16:10 0 -> pipe:[4156838]
+l-wx------. 1 victor victor 64 Oct 12 16:10 1 -> pipe:[4156839]
+l-wx------. 1 victor victor 64 Oct 12 16:10 2 -> pipe:[4156839]
+lr-x------. 1 victor victor 64 Oct 12 16:10 3 -> /proc/842398/fd

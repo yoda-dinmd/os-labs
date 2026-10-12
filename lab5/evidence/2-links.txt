@@ -1,0 +1,52 @@
++ echo hello
++ stat notes.txt
+  File: notes.txt
+  Size: 6         	Blocks: 8          IO Block: 4096   regular file
+Device: 0,34	Inode: 468755      Links: 1
+Access: (0644/-rw-r--r--)  Uid: ( 1000/  victor)   Gid: ( 1000/  victor)
+Context: unconfined_u:object_r:user_home_t:s0
+Access: 2026-10-12 16:10:15.955979650 +0300
+Modify: 2026-10-12 16:10:15.957090322 +0300
+Change: 2026-10-12 16:10:15.957090322 +0300
+ Birth: 2026-10-12 16:10:15.955979650 +0300
++ ls -li notes.txt
+468755 -rw-r--r--. 1 victor victor 6 Oct 12 16:10 notes.txt
++ ln notes.txt hard.txt
++ ls -li notes.txt hard.txt
+468755 -rw-r--r--. 2 victor victor 6 Oct 12 16:10 hard.txt
+468755 -rw-r--r--. 2 victor victor 6 Oct 12 16:10 notes.txt
++ rm notes.txt
++ cat hard.txt
+hello
++ ls -li hard.txt
+468755 -rw-r--r--. 1 victor victor 6 Oct 12 16:10 hard.txt
++ ln -s hard.txt soft.txt
++ ls -li hard.txt soft.txt
+468755 -rw-r--r--. 1 victor victor 6 Oct 12 16:10 hard.txt
+468756 lrwxrwxrwx. 1 victor victor 8 Oct 12 16:10 soft.txt -> hard.txt
++ cat soft.txt
+hello
++ rm hard.txt
++ cat soft.txt
+cat: soft.txt: No such file or directory
++ ls -l soft.txt
+lrwxrwxrwx. 1 victor victor 8 Oct 12 16:10 soft.txt -> hard.txt
++ mkdir d
++ ls -ld d
+drwxr-xr-x. 1 victor victor 0 Oct 12 16:10 d
++ mkdir d/x d/y
++ ls -ld d
+drwxr-xr-x. 1 victor victor 4 Oct 12 16:10 d
++ echo x
++ ls -l one.txt
+-rw-r--r--. 1 victor victor 2 Oct 12 16:10 one.txt
++ du -h one.txt
+4.0K	one.txt
++ truncate -s 1G big.img
++ ls -lh big.img
+-rw-r--r--. 1 victor victor 1.0G Oct 12 16:10 big.img
++ du -h big.img
+0	big.img
++ rm big.img
++ stat -f -c 'work filesystem: %T, block size %S' .
+work filesystem: btrfs, block size 4096

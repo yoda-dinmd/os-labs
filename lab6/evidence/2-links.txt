@@ -1,0 +1,18 @@
+$ mystat README . console
+README: file, inode 2, links 1, size 2441 bytes
+.: directory, inode 1, links 2, size 1024 bytes
+console: device, inode 27, links 1, size 0 bytes
+$ ln README r2
+$ mystat README r2
+README: file, inode 2, links 2, size 2441 bytes
+r2: file, inode 2, links 2, size 2441 bytes
+$ rm README
+$ mystat r2
+r2: file, inode 2, links 1, size 2441 bytes
+$ cat r2 | wc
+48 336 2441 
+$ mystat missing r2
+mystat: cannot stat missing
+r2: file, inode 2, links 1, size 2441 bytes
+$ mystat
+usage: mystat <path> [path ...]

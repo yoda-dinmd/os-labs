@@ -1,0 +1,39 @@
++ echo secret
++ chmod 600 s.txt
++ ls -l s.txt
+-rw-------. 1 victor victor 7 Oct 12 16:10 s.txt
++ chmod 000 s.txt
++ cat s.txt
+cat: s.txt: Permission denied
++ chmod u+r s.txt
++ cat s.txt
+secret
++ umask
+0022
++ touch new.txt
++ mkdir newdir
++ ls -ld new.txt newdir
+-rw-r--r--. 1 victor victor 0 Oct 12 16:10 new.txt
+drwxr-xr-x. 1 victor victor 0 Oct 12 16:10 newdir
++ mkdir box
++ echo hi
++ chmod u=r,go= box
++ ls box
+f
++ cat box/f
+cat: box/f: Permission denied
++ chmod u=x,go= box
++ ls box
+ls: cannot open directory 'box': Permission denied
++ cat box/f
+hi
++ chmod 755 box
++ ls -l /usr/bin/passwd
+-rwsr-xr-x. 1 root shadow 97408 Aug 10 09:57 /usr/bin/passwd
++ ls -ld /tmp
+drwxrwxrwt. 77 root root 3980 Oct 12 16:10 /tmp
++ test -r /etc/shadow
++ echo '/etc/shadow is not readable by this user'
+/etc/shadow is not readable by this user
++ ls -l /etc/shadow
+-rw-r-----. 1 root shadow 977 Oct  5 14:07 /etc/shadow
