@@ -1,0 +1,11 @@
+LAB$ ls /etc /nope > all.txt 2>&1
+LAB$ head -3 all.txt
+ls: cannot access '/nope': No such file or directory
+/etc:
+IM-7
+LAB$ ls /etc /nope 2>&1 > all.txt
+ls: cannot access '/nope': No such file or directory
+LAB$ head -3 all.txt
+/etc:
+IM-7
+NetworkManager

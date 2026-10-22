@@ -1,0 +1,27 @@
+LINUX$ grep -n "cd" user/sh.c | head
+170:        fprintf(2, "cannot cd %s\n", cmd + 3);
+LINUX$ nl -ba user/sh.c | sed -n '156,179p'
+   156	    }
+   157	  }
+   158	
+   159	  // Read and run input commands.
+   160	  while (getcmd(buf, sizeof(buf)) >= 0) {
+   161	    char *cmd = buf;
+   162	    while (*cmd == ' ' || *cmd == '\t')
+   163	      cmd++;
+   164	    if (*cmd == '\n') // is a blank command
+   165	      continue;
+   166	    if (cmd[0] == 'c' && cmd[1] == 'd' && cmd[2] == ' ') {
+   167	      // Chdir must be called by the parent, not the child.
+   168	      cmd[strlen(cmd) - 1] = 0; // chop \n
+   169	      if (chdir(cmd + 3) < 0)
+   170	        fprintf(2, "cannot cd %s\n", cmd + 3);
+   171	    } else {
+   172	      if (fork1() == 0)
+   173	        runcmd(parsecmd(cmd));
+   174	      wait(0);
+   175	    }
+   176	  }
+   177	  exit(0);
+   178	}
+   179	

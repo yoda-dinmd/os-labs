@@ -1,0 +1,24 @@
+LINUX$ cd ~/shtest
+LINUX$ touch README
+LINUX$ echo hello > f ; cat < f
+hello
+LINUX$ ls | grep READ
+README
+LINUX$ (echo a; echo b) | wc
+      2       2       4
+LINUX$ echo one ; echo two
+one
+two
+LINUX$ echo bg &
+[1] 657918
+LINUX$ bg
+wait
+LINUX$ ls *
+README	args_linux.c  f
+LINUX$ echo $HOME
+/home/victor
+LINUX$ echo "a b"
+a b
+LINUX$ mkdir d ; cd d ; ls ..
+README	args_linux.c  d  f
+LINUX$ cd ~/shtest

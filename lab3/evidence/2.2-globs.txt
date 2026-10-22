@@ -1,0 +1,8 @@
+LAB$ echo *.c
+a.c b.c
+LAB$ echo file?.txt
+file1.txt file2.txt
+LAB$ echo [a-b]*
+a.c alfa beta.txt b.c
+LAB$ echo *.xyz
+*.xyz

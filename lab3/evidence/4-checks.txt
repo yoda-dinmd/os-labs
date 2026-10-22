@@ -1,0 +1,12 @@
+LAB$ awk '$4 == "FAIL" {print $3}' access.log | sort | uniq -c
+     14 user0
+     14 user1
+     14 user2
+     15 user3
+     14 user4
+     15 user5
+     14 user6
+LAB$ cut -d' ' -f5 access.log | sort | uniq -c | awk '{n+=$1} END {print "page total:", n}'
+page total: 500
+LAB$ awk '$4 == "FAIL" {print $3}' access.log | sort | uniq -c | awk '{n+=$1} END {print "failure total:", n}'
+failure total: 100

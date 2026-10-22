@@ -1,0 +1,12 @@
+LINUX$ cd ~/xv6-riscv
+LINUX$ git rev-parse HEAD
+06aad25c735fd3159bdfae5680be4eab7b1668b2
+LINUX$ wc -l user/sh.c
+499 user/sh.c
+LINUX$ grep -n "#define" user/sh.c
+8:#define EXEC  1
+9:#define REDIR 2
+10:#define PIPE  3
+11:#define LIST  4
+12:#define BACK  5
+14:#define MAXARGS 10

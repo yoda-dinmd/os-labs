@@ -1,0 +1,9 @@
+LAB$ printf "Readline keys tested: ls /usr/sh<Tab><Tab>, cd /et<Tab><Enter>\n"
+Readline keys tested: ls /usr/sh<Tab><Tab>, cd /et<Tab><Enter>
+LAB$ pwd
+/etc
+LAB$ compgen -f /usr/sh
+/usr/share
+LAB$ compgen -d /et
+/etc
+LAB$ cd ~/os-lab3

@@ -1,0 +1,5 @@
+LAB$ type cd; type ls; type echo; which ls
+cd is a shell builtin
+ls is /usr/bin/ls
+echo is a shell builtin
+/usr/bin/ls

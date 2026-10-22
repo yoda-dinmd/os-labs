@@ -1,0 +1,100 @@
+LINUX$ nl -ba user/sh.c | sed -n '280,330p'
+   280	  if (q)
+   281	    *q = s;
+   282	  ret = *s;
+   283	  switch (*s) {
+   284	  case 0:
+   285	    break;
+   286	  case '|':
+   287	  case '(':
+   288	  case ')':
+   289	  case ';':
+   290	  case '&':
+   291	  case '<':
+   292	    s++;
+   293	    break;
+   294	  case '>':
+   295	    s++;
+   296	    if (*s == '>') {
+   297	      ret = '+';
+   298	      s++;
+   299	    }
+   300	    break;
+   301	  default:
+   302	    ret = 'a';
+   303	    while (s < es && !strchr(whitespace, *s) && !strchr(symbols, *s))
+   304	      s++;
+   305	    break;
+   306	  }
+   307	  if (eq)
+   308	    *eq = s;
+   309	
+   310	  while (s < es && strchr(whitespace, *s))
+   311	    s++;
+   312	  *ps = s;
+   313	  return ret;
+   314	}
+   315	
+   316	int
+   317	peek(char **ps, char *es, char *toks)
+   318	{
+   319	  char *s;
+   320	
+   321	  s = *ps;
+   322	  while (s < es && strchr(whitespace, *s))
+   323	    s++;
+   324	  *ps = s;
+   325	  return *s && strchr(toks, *s);
+   326	}
+   327	
+   328	struct cmd *parseline(char **, char *);
+   329	struct cmd *parsepipe(char **, char *);
+   330	struct cmd *parseexec(char **, char *);
+LINUX$ nl -ba user/sh.c | sed -n '422,450p'
+   422	parseexec(char **ps, char *es)
+   423	{
+   424	  char *q, *eq;
+   425	  int tok, argc;
+   426	  struct execcmd *cmd;
+   427	  struct cmd *ret;
+   428	
+   429	  if (peek(ps, es, "("))
+   430	    return parseblock(ps, es);
+   431	
+   432	  ret = execcmd();
+   433	  cmd = (struct execcmd *)ret;
+   434	
+   435	  argc = 0;
+   436	  ret = parseredirs(ret, ps, es);
+   437	  while (!peek(ps, es, "|)&;")) {
+   438	    if ((tok = gettoken(ps, es, &q, &eq)) == 0)
+   439	      break;
+   440	    if (tok != 'a')
+   441	      panic("syntax");
+   442	    cmd->argv[argc] = q;
+   443	    cmd->eargv[argc] = eq;
+   444	    argc++;
+   445	    if (argc >= MAXARGS)
+   446	      panic("too many args");
+   447	    ret = parseredirs(ret, ps, es);
+   448	  }
+   449	  cmd->argv[argc] = 0;
+   450	  cmd->eargv[argc] = 0;
+LINUX$ grep -nF '$' user/sh.c
+137:  write(2, "$ ", 2);
+LINUX$ grep -nF '*' user/sh.c | head -15
+22:  char *argv[MAXARGS];
+23:  char *eargv[MAXARGS];
+28:  struct cmd *cmd;
+29:  char *file;
+30:  char *efile;
+37:  struct cmd *left;
+38:  struct cmd *right;
+43:  struct cmd *left;
+44:  struct cmd *right;
+49:  struct cmd *cmd;
+53:void panic(char *);
+54:struct cmd *parsecmd(char *);
+55:void runcmd(struct cmd *) __attribute__((noreturn));
+59:runcmd(struct cmd *cmd)
+62:  struct backcmd *bcmd;

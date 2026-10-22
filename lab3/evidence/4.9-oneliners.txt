@@ -1,0 +1,21 @@
+LAB$ bash oneliners.sh
+100
+/page0
+/page1
+/page2
+/page3
+pages: 4
+    125 /page0
+    125 /page1
+    125 /page2
+    125 /page3
+     15 user3
+     15 user5
+user3: 72 requests, 15 failed
+10:10 user0
+10:15 user5
+10:20 user3
+      2 /bin/bash
+     32 /usr/sbin/nologin
+213
+214

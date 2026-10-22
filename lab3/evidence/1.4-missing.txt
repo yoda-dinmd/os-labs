@@ -1,0 +1,3 @@
+LAB$ nosuchprog; echo "exit code: $?"
+bash: nosuchprog: command not found
+exit code: 127

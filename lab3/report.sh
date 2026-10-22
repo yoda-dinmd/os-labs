@@ -1,0 +1,18 @@
+#!/bin/bash
+# usage: ./report.sh access.log
+if [ "$#" -ne 1 ]; then
+    echo "usage: $0 access.log" >&2
+    exit 1
+fi
+log=$1
+if [ ! -f "$log" ] || [ ! -r "$log" ]; then
+    echo "no such readable file: $log" >&2
+    exit 1
+fi
+total=$(wc -l < "$log")
+fails=$(awk '$4 == "FAIL" {n++} END {print n+0}' "$log")
+echo "$total requests, $fails failed"
+for user in user{0..6}; do
+    count=$(awk -v user="$user" '$3 == user && $4 == "FAIL" {n++} END {print n+0}' "$log")
+    echo "$user: $count failures"
+done

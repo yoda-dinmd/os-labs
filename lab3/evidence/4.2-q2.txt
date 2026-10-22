@@ -1,0 +1,6 @@
+LAB$ cut -d' ' -f5 access.log | sort -u | awk '{print} END {print "pages:", NR}'
+/page0
+/page1
+/page2
+/page3
+pages: 4

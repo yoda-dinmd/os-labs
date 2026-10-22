@@ -1,0 +1,6 @@
+LAB$ ./report.sh nope.log; echo "exit code: $?"
+no such readable file: nope.log
+exit code: 1
+LAB$ ./report.sh; echo "exit code: $?"
+usage: ./report.sh access.log
+exit code: 1

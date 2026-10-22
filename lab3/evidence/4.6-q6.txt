@@ -1,0 +1,4 @@
+LAB$ awk '$4 == "FAIL" {print $2, $3}' access.log | tail -3
+10:10 user0
+10:15 user5
+10:20 user3

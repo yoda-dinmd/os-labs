@@ -1,0 +1,2 @@
+$ grep -n "pause\|sleep" user/user.h
+25:int pause(int);

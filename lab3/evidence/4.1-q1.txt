@@ -1,0 +1,2 @@
+LAB$ awk '$4 == "FAIL" {n++} END {print n+0}' access.log
+100

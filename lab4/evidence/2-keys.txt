@@ -1,0 +1,9 @@
+Up arrow: '\x1b[A'
+   echo key_test_done
+key_test_done
+Tab: '\t'
+ echo key_test_done
+key_test_done
+Ctrl+R: '\x12'
+ echo key_test_done
+key_test_done

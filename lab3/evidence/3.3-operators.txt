@@ -1,0 +1,11 @@
+LAB$ echo first > notes.md; echo second >> notes.md; cat notes.md
+first
+second
+LAB$ wc -l < access.log
+500
+LAB$ wc -l access.log
+500 access.log
+LAB$ ls /nope 2> /dev/null || echo "failed with code $?"
+failed with code 2
+LAB$ mkdir -p tmp && cd tmp && echo "I am in $(pwd)"; cd ~/os-lab3
+I am in /home/victor/os-lab3/tmp

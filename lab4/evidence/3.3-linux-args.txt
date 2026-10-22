@@ -1,0 +1,21 @@
+LINUX$ cd ~/shtest
+LINUX$ gcc -Wall -Wextra -Werror -o args args_linux.c
+LINUX$ ./args one              two         three
+argc = 4
+argv[0] = [./args]
+argv[1] = [one]
+argv[2] = [two]
+argv[3] = [three]
+LINUX$ ./args *.c "x y"
+argc = 3
+argv[0] = [./args]
+argv[1] = [args_linux.c]
+argv[2] = [x y]
+LINUX$ ./args $HOME
+argc = 2
+argv[0] = [./args]
+argv[1] = [/home/victor]
+LINUX$ ./args 'single quoted'
+argc = 2
+argv[0] = [./args]
+argv[1] = [single quoted]

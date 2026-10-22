@@ -1,0 +1,2 @@
+LAB$ awk '$3 == "user3" {n++; if ($4 == "FAIL") f++} END {print "user3:", n+0, "requests,", f+0, "failed"}' access.log
+user3: 72 requests, 15 failed

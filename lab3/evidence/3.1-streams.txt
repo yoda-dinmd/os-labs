@@ -1,0 +1,8 @@
+LAB$ cd ~/os-lab3
+LAB$ ls /etc /nope > out.txt 2> err.txt
+LAB$ wc -l out.txt; cat err.txt
+214 out.txt
+ls: cannot access '/nope': No such file or directory
+LAB$ ls /etc /nope > all.txt 2>&1; tail -2 all.txt
+xscreensaver
+zypp

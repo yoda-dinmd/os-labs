@@ -1,0 +1,8 @@
+LAB$ echo "$PATH" | tr ':' '\n'
+/home/victor/.local/bin
+/usr/local/bin
+/usr/bin
+/bin
+/usr/sbin
+LAB$ printf '%s\n' "$PATH" | awk -F: '{print "PATH entries:", NF}'
+PATH entries: 5

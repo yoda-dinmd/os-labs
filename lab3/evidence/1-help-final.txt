@@ -1,0 +1,11 @@
+$ man ls (excerpt)
+       -t     sort by time, newest first; see --time
+
+       -T, --tabsize=COLS
+	      assume tab stops at each COLS instead of 8
+
+$ man -k list-directory (matching entries)
+dir (1)              - list directory contents
+ls (1)               - list directory contents
+vdir (1)             - list directory contents
+ntfsls (8)           - list directory contents on an NTFS filesystem

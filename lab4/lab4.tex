@@ -1,0 +1,205 @@
+\documentclass{../latex/utmreport}
+\newcommand{\ReportTitle}{Lab 4: The xv6 Shell from the Outside}
+\input{../latex/report-common.tex}
+\begin{document}
+\makeutmreporttitlepage
+\tableofcontents
+\clearpage
+\begin{utmabstract}[Abstract]
+This laboratory compares a production command interpreter with the small shell
+of xv6. A pinned xv6 revision was built on openSUSE Tumbleweed using a RISC-V
+cross-compiler and booted in QEMU. A sleep utility and an argument-inspection
+program were registered and tested. Parallel Bash and xv6 experiments establish
+which facilities are shared and which require additional shell interpretation.
+Reading the source explains the absence of expansion, the treatment of quotes,
+and a limitation of directory changes inside compound command lines.
+\utmkeywords{xv6, Bash, RISC-V, exec, argument vector, shell parsing}
+\end{utmabstract}
+\utmintroduction
+The objective is to distinguish kernel mechanisms from shell conveniences by
+observing the same command text under two interpreters. The handout assigns
+four parts: sleep compatibility, a shell comparison, inspection of argument
+vectors, and source analysis~\cite{handout}.
+
+The host is openSUSE Tumbleweed. Revision
+\code{06aad25c735fd3159bdfae5680be4eab7b1668b2} of xv6 is checked out on branch
+\code{lab} in \code{~/xv6-riscv}. GCC 14.4.0 with the
+\code{riscv64-suse-linux-} prefix and QEMU 11.1.2 provide the build and execution
+environment. The course preparation check built the kernel and filesystem and
+verified a successful boot and directory listing. Figures show saved terminal
+output; the corresponding plain text is retained with the laboratory files.
+
+\chapter{Adapting and testing the sleep utility}
+\section{Interface and build integration}
+The user header declares \code{int pause(int);} at line 25. The source retained
+from Lab 2 already calls this function, so the correct adaptation is to preserve
+that call while keeping the executable's name \code{sleep}. The program validates
+that exactly one operand is supplied, converts it with \code{atoi}, calls
+\code{pause}, and exits. Incorrect argument counts produce a diagnostic on
+standard error and terminate with status 1.
+\screenshot{1.1-api.png}{The pause declaration used by this xv6 revision}{fig:l4-api}
+The Makefile registers both \code{$U/_sleep} and \code{$U/_args} as tab-indented
+UPROGS entries with continuation backslashes. A blank line still terminates the
+continued list. An additional compiler-detection branch recognizes openSUSE's
+prefix, allowing the ordinary \code{make qemu} command to work without a manually
+exported variable. The complete Makefile and a focused patch accompany the report.
+\screenshot{1.2-sleep-source.png}{Sleep source and its UPROGS registration}{fig:l4-sleep-source}
+
+\section{Execution results and limits}
+The command \code{sleep 20} returned normally to the xv6 prompt. Both
+\code{sleep} and \code{sleep 10 20} printed \code{usage: sleep <ticks>}.
+These observations establish executable availability and argument-count handling.
+They do not independently measure the exact waiting duration or display the
+process exit status. The implementation follows the exercise's numeric-conversion
+scope and does not fully validate malformed tick strings.
+\screenshot{1.3-sleep.png}{A valid call and two invalid argument counts}{fig:l4-sleep-test}
+
+\chapter{Comparing the two shells}
+\section{Method and results}
+Bash ran in \code{~/shtest}, with README and the Linux argument-program source
+available. xv6 ran from the root of its filesystem image, where the executables
+are installed. Both interpreters received the prescribed command lines. Differences
+in listing format are separated from differences in shell interpretation.
+\begingroup\small\setstretch{1}
+\begin{longtable}{p{0.31\textwidth}p{0.27\textwidth}p{0.33\textwidth}}
+\textbf{Input} & \textbf{Bash result} & \textbf{xv6 result}\\\hline
+\code{echo hello > f ; cat < f} & hello & hello\\
+\code{ls | grep READ} & README & README with type, inode and size columns\\
+\code{(echo a; echo b) | wc} & 2 lines, 2 words, 4 bytes & Same counts\\
+\code{echo one ; echo two} & one and two on separate lines & Same\\
+\code{echo bg &} & Job/PID notice and bg & bg; no Bash-style job notice\\
+\code{ls *} & Expanded directory entries & \code{ls: cannot open *}\\
+\code{echo $HOME} & /home/victor & Literal \code{$HOME}\\
+\code{echo "a b"} & a b without quotes & \code{"a b"} including quotes\\
+\code{mkdir d ; cd d ; ls ..} & Changes into d, lists parent & \code{exec cd failed}, then root listing\\
+Up arrow, Tab, Ctrl+R & History, completion, reverse search & Raw input bytes; no equivalent editing action\\
+\end{longtable}
+\endgroup
+\screenshot{2.1-bash.png}{The comparison command sequence under Bash}{fig:l4-bash}
+\screenshot{2.2-xv6.png}{The same command sequence under xv6}{fig:l4-xv6}
+
+\section{Directory changes and executable search}
+The compound \code{mkdir d ; cd d ; ls ..} test reveals an important qualification
+to the handout. In this xv6 shell, \code{cd} is recognized only when it begins the
+whole input line before normal parsing. Embedded in a semicolon list, it is treated
+as an ordinary external executable and fails. Consequently the exact combined
+command never changes directory in xv6.
+
+A subsequent standalone \code{cd d} succeeds. From that directory,
+\code{ls ..} fails with \code{exec ls failed}, while \code{/ls ..} works.
+There is no PATH search: the executable name \code{ls} is relative to the current
+directory, whereas \code{/ls} identifies the installed program in the root.
+The relative pathname \code{../ls} would also locate it from \code{/d}.
+The test ends with a standalone \code{cd /}.
+\screenshot{2.3-path.png}{Standalone directory change and the absolute-path workaround}{fig:l4-path}
+
+\section{Shared mechanisms and missing conveniences}
+Both shells provide process execution, input/output redirection, pipes, sequencing,
+grouping and background execution. Each can change its own current directory,
+although xv6's recognition is restricted. Bash additionally provides variable and
+pathname expansion, meaningful quote syntax, executable search, history, completion,
+conditional operators and job-control commands.
+
+History and completion would be especially noticeable omissions in daily use.
+A fixed executable-directory fallback would be a relatively small first addition:
+after a suitable failed relative execution attempt, try a known program directory
+while retaining the semantics of explicit pathnames. Quote-aware parsing and general
+globbing would involve more extensive interpretation. This is an implementation
+assessment rather than a modification made in this laboratory.
+
+\chapter{Inspecting the argument vector}
+\section{Two implementations of the same observation}
+The xv6 program includes its user headers, prints \code{argc}, prints each
+\code{argv[i]} inside brackets and exits through \code{exit(0)}. The Linux version
+uses \code{stdio.h} and returns zero. Neither version performs globbing, variable
+expansion or quote processing. The Linux build succeeds with
+\code{gcc -Wall -Wextra -Werror -o args args_linux.c}.
+\screenshot{3.1-args-source.png}{Argument-inspection source and build registration}{fig:l4-args-source}
+
+\section{The wildcard and quoted-space experiment}
+In the Bash test directory, the matching C filename is \code{args_linux.c}.
+The two executions produce the following complete argument vectors:
+\begin{lstlisting}
+LINUX$ ./args *.c "x y"
+argc = 3
+argv[0] = [./args]
+argv[1] = [args_linux.c]
+argv[2] = [x y]
+
+$ args *.c "x y"
+argc = 4
+argv[0] = [args]
+argv[1] = [*.c]
+argv[2] = ["x]
+argv[3] = [y"]
+\end{lstlisting}
+Bash passes two operands plus the program name, whereas xv6 passes three operands
+plus the program name. The number of Bash operands would increase if more C files
+matched. The quoted space survives inside one Bash argument, but xv6 separates at
+that space and retains the quote characters in the adjacent words.
+
+\section{Other argument-boundary tests}
+\begingroup\small\setstretch{1}
+\noindent\begin{tabularx}{\textwidth}{p{0.29\textwidth}YY}
+\textbf{Operands typed} & \textbf{Bash} & \textbf{xv6}\\\hline
+\code{one    two    three} & argc 4; three words & argc 4; same words\\
+\code{$HOME} & argc 2; expanded home pathname & argc 2; literal dollar-name\\
+\code{'single quoted'} & argc 2; one unquoted string & argc 3; two strings retaining quotes\\
+\end{tabularx}\par
+\endgroup
+\screenshot{3.2-xv6-args.png}{All argument-vector tests in xv6}{fig:l4-args-xv6}
+\screenshot{3.3-linux-args.png}{All argument-vector tests in Bash}{fig:l4-args-bash}
+Repeated unquoted whitespace separates words in both interpreters and does not
+create empty arguments. The shell constructs the vector before the executable
+begins. The kernel's execution interface transfers that vector to the new program;
+it does not implement Bash's wildcard or quoting language. The receiving program
+merely exposes the values that it was given.
+
+\chapter{Explaining the results from the source}
+\section{The five command kinds}
+The pinned \code{user/sh.c} contains 499 lines. Lines 8--12 define five node kinds:
+\begin{description}[leftmargin=1.25cm]
+\item[EXEC] An ordinary command word produces an execution node; no special
+operator is required. The execution case invokes \code{exec} with its argument vector.
+\item[REDIR] The operators \code{<}, \code{>} and the parsed \code{>>} token produce
+redirection nodes. A descriptor is closed and reopened before the nested command runs.
+\item[PIPE] The \code{|} operator produces a pipe node. Children connect their input
+and output using the pipe descriptors and \code{dup}.
+\item[LIST] A semicolon produces a sequence node. The left side is forked and waited
+for before the right side runs.
+\item[BACK] An ampersand produces a background node, which forks its nested command
+without waiting for that child in the node itself.
+\end{description}
+Parentheses invoke \code{parseblock} to group existing node kinds; they are not a
+sixth kind. Recognizing a token does not imply full Bash semantics: xv6's \code{>>}
+case opens with \code{O_WRONLY | O_CREATE} without an append flag or a seek, so it
+must not be assumed to append like Bash.
+\screenshot{4.1-defines.png}{Revision, source length and command-node definitions}{fig:l4-defines}
+\screenshot{4.2-cases.png}{Execution and parsing switch cases}{fig:l4-cases}
+
+\section{Why cd belongs to the parent shell}
+Lines 166--170 handle \code{cd} directly in \code{main}, before the ordinary fork
+and parse path. The persistent shell process must call \code{chdir}; a separate
+child's directory change cannot update its parent. The position of this check
+also accounts for the failure of an embedded \code{cd} in the earlier list.
+\screenshot{4.3-cd.png}{Directory changes handled before forking and parsing}{fig:l4-cd}
+
+\section{The absence of expansion code}
+The token reader skips whitespace, recognizes operator characters and collects
+ordinary word spans. It has no state for single or double quotes, and no stage
+that expands variables or enumerates wildcard matches. Searching for an asterisk
+finds C pointer syntax, not an implementation of globbing; searching for a dollar
+sign finds the prompt. Those search hits require interpretation in their surrounding
+code. This source reading agrees with the literal stars, dollar-names and quote
+characters measured by the argument program.
+
+\utmconclusions
+The completed build and boot establish a working xv6 environment on openSUSE.
+The sleep utility reuses the already-correct pause interface from Lab 2, and the
+argument utility isolates the shell's interpretation from application behaviour.
+Both shells rely on familiar process and descriptor mechanisms, but Bash performs
+substantial additional work before a program starts. The source analysis explains
+both the missing expansion features and the narrower treatment of directory changes.
+All prescribed command experiments were executed, and QEMU was shut down through
+its escape command so the filesystem image is released for subsequent use.
+\end{document}

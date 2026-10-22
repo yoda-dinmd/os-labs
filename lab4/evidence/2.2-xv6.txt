@@ -1,0 +1,47 @@
+$ echo hello > f ; cat < f
+hello
+$ ls | grep READ
+README         2 2 2441
+$ (echo a; echo b) | wc
+2 2 4 
+$ echo one ; echo two
+one
+two
+$ echo bg &
+bg
+$ ls *
+ls: cannot open *
+$ echo $HOME
+$HOME
+$ echo "a b"
+"a b"
+$ mkdir d ; cd d ; ls ..
+exec cd failed
+.              1 1 1024
+..             1 1 1024
+README         2 2 2441
+args           2 3 34000
+sleep          2 4 34008
+cat            2 5 35368
+echo           2 6 34280
+forktest       2 7 17328
+grep           2 8 42720
+init           2 9 34736
+kill           2 10 34216
+ln             2 11 34024
+ls             2 12 41496
+mkdir          2 13 34256
+rm             2 14 34240
+sh             2 15 56128
+stressfs       2 16 35128
+usertests      2 17 200232
+grind          2 18 50272
+wc             2 19 36240
+zombie         2 20 33624
+logstress      2 21 36168
+forphan        2 22 35072
+dorphan        2 23 34536
+sync           2 24 33688
+console        3 25 0
+f              2 26 6
+d              1 27 32

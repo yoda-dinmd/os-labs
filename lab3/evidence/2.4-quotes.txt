@@ -1,0 +1,9 @@
+LAB$ echo '$HOME' "$HOME" \$HOME
+$HOME /home/victor $HOME
+LAB$ echo {1..5}; echo $((7 * 6))
+1 2 3 4 5
+42
+LAB$ echo "today is $(date +%A), I am $(whoami)"
+today is Monday, I am victor
+LAB$ touch log{1..3}.txt && ls log*
+log1.txt  log2.txt  log3.txt

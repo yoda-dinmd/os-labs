@@ -1,0 +1,3 @@
+LAB$ ls /etc | wc -l; ls -l /etc | wc -l
+213
+214

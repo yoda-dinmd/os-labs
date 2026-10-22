@@ -1,0 +1,7 @@
+LAB$ sleep 100 &
+[1] 659208
+LAB$ jobs; kill %1; jobs
+[1]+  Running                    sleep 100 &
+[1]+  Running                    sleep 100 &
+LAB$ sleep 0.2; jobs
+[1]+  Terminated                 sleep 100

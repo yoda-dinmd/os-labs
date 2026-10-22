@@ -1,0 +1,10 @@
+LAB$ chmod +x report.sh
+LAB$ ./report.sh access.log
+500 requests, 100 failed
+user0: 14 failures
+user1: 14 failures
+user2: 14 failures
+user3: 15 failures
+user4: 14 failures
+user5: 15 failures
+user6: 14 failures

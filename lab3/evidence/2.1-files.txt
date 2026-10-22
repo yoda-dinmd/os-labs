@@ -1,0 +1,4 @@
+LAB$ cd ~/os-lab3/play
+LAB$ touch a.c b.c file1.txt file2.txt notes.txt "alfa beta.txt"
+LAB$ ls
+ a.c  'alfa beta.txt'   b.c   file1.txt   file2.txt   notes.txt

@@ -1,0 +1,6 @@
+LAB$ echo history_marker_lab3
+history_marker_lab3
+LAB$ pwd
+/home/victor/os-lab3
+LAB$ date +%F
+2026-10-12

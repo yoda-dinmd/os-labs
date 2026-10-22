@@ -1,0 +1,35 @@
+LAB$ MANPAGER=cat man ls | col -b | grep -A4 -- 'sort by time'
+No manual entry for ls
+Possibly, man page is not installed, try online at: https://manpages.opensuse.org/ls
+LAB$ ls --help | head
+Usage: ls [OPTION]... [FILE]...
+List information about the FILEs (the current directory by default).
+Sort entries alphabetically if none of -cftuvSUX nor --sort is specified.
+
+Mandatory arguments to long options are mandatory for short options too.
+  ]8;;https://www.gnu.org/software/coreutils/manual/coreutils.html#ls-a\[1m-a, --all[0m]8;;\
+         do not ignore entries starting with .
+  ]8;;https://www.gnu.org/software/coreutils/manual/coreutils.html#ls-A\[1m-A, --almost-all[0m]8;;\
+         do not list implied . and ..
+      ]8;;https://www.gnu.org/software/coreutils/manual/coreutils.html#ls--author\[1m--author[0m]8;;\
+LAB$ man -k "list directory"
+ntfsls (8)           - list directory contents on an NTFS filesystem
+LAB$ help cd | head -18
+cd: cd [-L|[-P [-e]]] [-@] [dir]
+    Change the shell working directory.
+    
+    Change the current directory to DIR.  The default DIR is the value of the
+    HOME shell variable. If DIR is "-", it is converted to $OLDPWD.
+    
+    The variable CDPATH defines the search path for the directory containing
+    DIR.  Alternative directory names in CDPATH are separated by a colon (:).
+    A null directory name is the same as the current directory.  If DIR begins
+    with a slash (/), then CDPATH is not used.
+    
+    If the directory is not found, and the shell option `cdable_vars' is set,
+    the word is assumed to be  a variable name.  If that variable has a value,
+    its value is used for DIR.
+    
+    Options:
+      -L	force symbolic links to be followed: resolve symbolic
+    		links in DIR after processing instances of `..'

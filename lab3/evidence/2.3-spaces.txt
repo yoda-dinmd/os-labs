@@ -1,0 +1,7 @@
+LAB$ ls alfa beta.txt
+ls: cannot access 'alfa': No such file or directory
+ls: cannot access 'beta.txt': No such file or directory
+LAB$ ls "alfa beta.txt"
+'alfa beta.txt'
+LAB$ ls alfa\ beta.txt
+'alfa beta.txt'

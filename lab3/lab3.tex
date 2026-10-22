@@ -1,0 +1,225 @@
+\documentclass{../latex/utmreport}
+\newcommand{\ReportTitle}{Lab 3: The Command Line: Shell, Pipes and Text Filters}
+\input{../latex/report-common.tex}
+\begin{document}
+\makeutmreporttitlepage
+\tableofcontents
+\clearpage
+\begin{utmabstract}[Abstract]
+This work examines the shell as an interpreter between a user and operating-system
+services. Experiments on openSUSE Tumbleweed establish how Bash resolves commands,
+expands arguments, connects streams and manages asynchronous jobs. A deterministic
+500-record data set supports eight pipeline exercises and a reusable reporting
+script. Independent aggregation checks establish 100 failures and an even distribution
+of requests across four pages. The results also demonstrate why a maximum-count
+query must preserve ties and why redirection order changes observable behaviour.
+\utmkeywords{Bash, expansion, file descriptors, pipes, processes, text filters}
+\end{utmabstract}
+\utmintroduction
+The purpose of the laboratory is to explain command-line behaviour through
+predictions and measured results, then combine small text-processing tools into a
+working program. The course handout provides five practical parts~\cite{handout}.
+The Linux exercises were run in \code{~/os-lab3}; the report and implementation
+are retained in the existing course repository.
+
+Commands use the C locale and Bash without personal startup files. Predictions
+were saved before the first expansion experiments. Figures show saved terminal
+output; the corresponding plain text is retained with the laboratory files.
+
+\chapter{Command lookup and interactive assistance}
+\section{Completion and history}
+Tab completed \code{/usr/sh} to the unique existing directory \code{/usr/share/}.
+The next Tab did not display competing alternatives in this environment.
+Completion of \code{/et} produced \code{/etc/}, and executing the completed
+\code{cd} command changed the working directory accordingly.
+Ctrl+R recovered \code{echo history_marker_lab3} after two intervening commands;
+Enter executed the recovered line. Completion and reverse search are shell editing
+facilities, rather than features of the commands being prepared.
+\screenshot{1.1-tab.png}{Completion targets and the resulting directory}{fig:l3-tab}
+
+\section{Built-ins, PATH and failure status}
+Both \code{cd} and \code{echo} resolved to Bash built-ins. The \code{ls} executable
+resolved to \code{/usr/bin/ls}. A separate \code{cd} process could change only its
+own current directory; therefore the interactive shell must perform this operation
+in its own process. An external implementation of \code{echo} can coexist with the
+built-in without changing the lookup result observed here.
+\screenshot{1.2-type.png}{Command classification and executable location}{fig:l3-type}
+The clean-shell PATH check contains five entries: \code{~/.local/bin},
+\code{/usr/local/bin}, \code{/usr/bin}, \code{/bin} and \code{/usr/sbin}.
+The count depends on the configured shell environment.
+\screenshot{1.3-path.png}{PATH search locations and entry count}{fig:l3-path}
+An unknown executable name produces status 127. The shell reports that it could
+not find a command; this differs from a program starting successfully and then
+returning an error of its own.
+\screenshot{1.4-missing.png}{Status returned for a command that does not exist}{fig:l3-status}
+
+\section{Finding help}
+The requested commands were \code{man ls}, \code{ls --help},
+\code{man -k "list directory"} and \code{help cd}. The first manual lookup
+exposed a missing \code{ls} manual page on this installation. The corrected setup
+includes \code{coreutils-doc}, the separate package for these pages. A final
+lookup using the local manual search path succeeded and the manual index found
+\code{ls}, \code{dir} and \code{vdir}. The option
+\code{-t} sorts entries by modification time, newest first. Inside a manual pager,
+\code{/sort} searches, \code{n} repeats the search, and \code{q} exits.
+Bash's \code{help} documents its built-ins; \code{man -k} depends on the installed
+manual-page index.
+
+\chapter{Expansion and quoting}
+\section{Experimental files and predictions}
+The test directory initially contained two C filenames, three ordinary text
+filenames, and \code{alfa beta.txt}. Later, brace expansion created three log files.
+\screenshot{2.1-files.png}{Files used for expansion experiments}{fig:l3-files}
+\begingroup\small\setstretch{1}
+\begin{longtable}{p{0.32\textwidth}p{0.29\textwidth}p{0.30\textwidth}}
+\textbf{Command} & \textbf{Prior prediction} & \textbf{Observed output}\\\hline
+\code{echo *.c} & a.c b.c & a.c b.c\\
+\code{echo file?.txt} & file1.txt file2.txt & file1.txt file2.txt\\
+\code{echo [a-b]*} & a.c alfa beta.txt b.c & Same names, same order\\
+\code{echo *.xyz} & Literal *.xyz & Literal *.xyz\\
+\code{ls alfa beta.txt} & Two missing paths & Errors for alfa and beta.txt\\
+\code{ls "alfa beta.txt"} & One filename; possible display quotes & 'alfa beta.txt'\\
+\code{echo '$HOME' "$HOME" \$HOME} & Literal, expanded, literal & \code{$HOME /home/victor $HOME}\\
+\code{echo {1..5}; echo $((7 * 6))} & 1 2 3 4 5; then 42 & As predicted\\
+\lstinline!echo "today is $(date +%A), I am $(whoami)"! & Runtime weekday and login & today is Monday, I am victor\\
+\code{touch log{1..3}.txt && ls log*} & Three numbered log names & log1.txt log2.txt log3.txt\\
+\end{longtable}
+\endgroup
+The recorded predictions agreed with the semantic results. Terminal column spacing
+and GNU \code{ls}'s presentation quotes do not change the underlying filenames.
+The unmatched pattern stayed literal because default Bash glob options were used.
+\screenshot{2.2-globs.png}{Matched and unmatched pathname patterns}{fig:l3-globs}
+
+\section{Responsibility for constructing arguments}
+The shell expands \code{*.c} before it invokes \code{echo}; the receiving program
+need not enumerate a directory. A glob result containing a space remains one
+argument, even though the displayed output alone does not show that boundary.
+In contrast, unquoted spaces in the command text split \code{alfa beta.txt} into
+two arguments. Either double quotes or a backslash before the space fixes the call.
+\screenshot{2.3-spaces.png}{Failure caused by unquoted whitespace and two fixes}{fig:l3-spaces}
+Single quotes inhibit expansion. Double quotes preserve word boundaries while
+allowing variable, arithmetic and command substitution. An escaped dollar sign is
+literal. GNU \code{ls} may add quotes when displaying a spaced filename in a
+terminal; these are presentation characters, not part of the stored name.
+\screenshot{2.4-quotes.png}{Quoting, arithmetic, brace and command expansion}{fig:l3-quotes}
+
+\chapter{Streams and process control}
+\section{Separating output and diagnostics}
+In \code{ls /etc /nope > out.txt 2> err.txt}, descriptor 1 carries the directory
+listing into \code{out.txt}, while descriptor 2 carries the missing-path diagnostic
+into \code{err.txt}. Redirecting both streams to one file does not guarantee that
+an error will appear at its end: buffering and write order still determine placement.
+\screenshot{3.1-streams.png}{Directory output and error output in separate files}{fig:l3-streams}
+
+\section{The order of redirections}
+Redirection is processed from left to right. With \code{> all.txt 2>&1}, stdout
+first changes destination and stderr then duplicates that destination. With
+\code{2>&1 > all.txt}, stderr retains the original terminal destination while
+stdout is subsequently moved to the file. The experiment therefore makes the
+second version's error visible on the terminal.
+\screenshot{3.2-order.png}{Different outcomes from reversing redirection order}{fig:l3-order}
+
+\section{Input, chaining and asynchronous execution}
+An input redirection gives \code{wc} bytes on standard input without a pathname
+argument, so \code{wc -l < access.log} prints only 500. Supplying the pathname as
+an argument additionally prints its name. Truncating and appending writes to
+\code{notes.md} preserve the two lines \code{first} and \code{second}.
+
+A semicolon sequences commands irrespective of status. The \code{&&} operator
+continues only after success; \code{||} continues only after failure. The failing
+GNU \code{ls /nope} returns 2, which the following conditional message reports.
+\screenshot{3.3-operators.png}{Input redirection, appending and conditional commands}{fig:l3-operators}
+The background \code{sleep 100} appears as job 1 and is signalled by
+\lstinline!kill %1!. An immediate job listing may still show Running; a later check
+observes termination. This illustrates asynchronous delivery and collection of
+process status rather than a failed kill command.
+\screenshot{3.4-jobs.png}{Starting, inspecting and terminating a background job}{fig:l3-jobs}
+
+\chapter{Answering questions with pipelines}
+\section{Data model and consistency checks}
+The prescribed generator emits 500 records with date, time, user, result and page
+fields. Every fifth index fails, every fourth selects the same page, and users
+cycle modulo seven. Queries filter the relevant fields rather than matching
+unrelated substrings. Each of Q1--Q8 occupies one executable line in
+\code{oneliners.sh}; comments identify the question.
+
+\section{Q1: failed requests}
+The measured failure count is 100, consistent with one failure per five records.
+\screenshot{4.1-q1.png}{Counting failed requests}{fig:l3-q1}
+\section{Q2: distinct pages}
+Sorting the fifth field and removing duplicates yields four paths, from
+\code{/page0} through \code{/page3}.
+\screenshot{4.2-q2.png}{The four distinct page names}{fig:l3-q2}
+\section{Q3: requests per page}
+Each page receives 125 requests. Their sum is 500, independently matching the
+number of generated records.
+\screenshot{4.3-q3.png}{Equal request counts across the pages}{fig:l3-q3}
+\section{Q4: users with the most failures}
+Both user3 and user5 have 15 failed requests. Every other user has 14. The query
+retains every count equal to the first, maximum count after descending sorting;
+using only \code{head -1} would incorrectly discard a tie. The seven counts sum
+to 100, independently agreeing with Q1.
+\screenshot{4.4-q4.png}{Both users sharing the maximum failure count}{fig:l3-q4}
+\section{Q5: user3}
+Filtering the third field yields 72 requests for user3, of which 15 failed.
+\screenshot{4.5-q5.png}{Total and failed requests for user3}{fig:l3-q5}
+\section{Q6: the last failed records}
+The final three matching rows yield \code{10:10 user0}, \code{10:15 user5}, and
+\code{10:20 user3}. Here last refers to file order: the generated minutes cycle
+and must not be mistaken for a monotonically increasing timestamp.
+\screenshot{4.6-q6.png}{Time and user from the last three failed records}{fig:l3-q6}
+\section{Q7: configured account shells}
+The observed account file contains two entries with \code{/bin/bash} and 32 with
+\code{/usr/sbin/nologin}. These are account configurations, including service
+accounts, rather than a count of current interactive users.
+\screenshot{4.7-q7.png}{Counts grouped by the account shell field}{fig:l3-q7}
+\section{Q8: the extra long-listing line}
+The prior prediction was a difference of one. The two pipelines returned 213 and
+214: ordinary piped \code{ls} emits one name per line, whereas its long form adds
+a \code{total} header. These exact counts are specific to this installation.
+Embedded newlines in filenames, aliases or concurrent changes would require
+additional care when generalising the result.
+\screenshot{4.8-q8.png}{The additional header in a long directory listing}{fig:l3-q8}
+\screenshot{4.9-oneliners.png}{Executing all eight one-liners in order}{fig:l3-all}
+\section{Regular-expression bonus}
+A \code{grep -E} expression restricts the time to \code{10:[0-5]0} and the result
+field to FAIL. It prints 50 records. Each tenth generator index satisfies the
+minute condition and is also divisible by five. The executable query is retained
+separately as \code{bonus.sh}.
+
+\chapter{A reusable report program}
+\section{Implementation and measured behaviour}
+The completed script checks the argument count and file readability, obtains the
+total and failed counts, then iterates over user0 through user6. Field-aware
+aggregation returns explicit zeroes for empty sets. Quoted path arguments preserve
+filenames containing spaces.
+\screenshot{5.1-source.png}{Implementation of the reporting script}{fig:l3-source}
+On the shared data it reports 500 requests and 100 failures, followed by counts
+14, 14, 14, 15, 14, 15 and 14 for the seven users.
+\screenshot{5.2-report.png}{Successful report for the generated log}{fig:l3-report}
+A nonexistent pathname produces an error on descriptor 2 and status 1. Missing
+or extra arguments also fail. Additional checks exercised an empty input, a
+zero-failure input and a pathname containing spaces.
+\screenshot{5.3-error.png}{Missing-file and missing-argument diagnostics}{fig:l3-error}
+
+\section{Interpreter, permissions and exit status}
+The shebang \code{#!/bin/bash} identifies the interpreter for direct execution.
+Without execute permission, \code{./report.sh} is rejected, normally with status
+126; explicitly running \code{bash report.sh} instead requires read permission.
+The \code{./} prefix selects a pathname in the current directory rather than
+relying on a PATH entry. Diagnostic output on stderr preserves the normal data
+stream, and status 1 permits a caller to react to failure.
+
+The optional cron bonus was not executed; no scheduled-run evidence is claimed.
+The notebook includes a full-path example for that optional extension. Unrelated
+crontab entries must be retained when adding or removing a temporary lab schedule.
+
+\utmconclusions
+The experiments identify three responsibilities that are easy to confuse: Bash
+constructs arguments, redirections construct descriptor connections, and programs
+consume the resulting arguments and streams. Small utilities become useful data
+analysis tools when their inputs and fields are well defined. The agreement of
+independent totals validates the pipelines, while the tied failure counts show
+why seemingly minor query choices affect correctness. The final script makes
+these observations reusable through explicit validation and meaningful status.
+\end{document}
