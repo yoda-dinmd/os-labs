@@ -1,0 +1,27 @@
+$ ./run
+parent: my PID is 27
+child:  my PID is 28, my parent is 27
+total 108
+-rwxr-xr-x. 1 victor victor 20456 Oct 26 12:01 pipeline
+-rw-r--r--. 1 victor victor  1013 Oct 26 12:01 pipeline.c
+-rwxr-xr-x. 1 victor victor 20544 Oct 26 12:01 redirect
+-rw-r--r--. 1 victor victor   703 Oct 26 12:01 redirect.c
+-rwxr-xr-x. 1 victor victor 20544 Oct 26 12:01 run
+-rw-r--r--. 1 victor victor   911 Oct 26 12:01 run.c
+-rwxr-xr-x. 1 victor victor 20608 Oct 26 12:01 zombie
+-rw-r--r--. 1 victor victor   926 Oct 26 12:01 zombie.c
+parent: child 28 ended with status 0
+
+Child exec line: execlp("date", "date", (char *)NULL);
+$ gcc -Wall -Wextra -Werror -o run run.c && ./run
+parent: my PID is 29
+child:  my PID is 35, my parent is 29
+Mon Oct 26 12:01:04 EET 2026
+parent: child 35 ended with status 0
+
+Child exec line: execlp("nosuchprog", "nosuchprog", (char *)NULL);
+$ gcc -Wall -Wextra -Werror -o run run.c && ./run
+parent: my PID is 36
+child:  my PID is 42, my parent is 36
+exec: No such file or directory
+parent: child 42 ended with status 127

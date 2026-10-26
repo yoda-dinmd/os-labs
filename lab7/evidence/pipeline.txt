@@ -1,0 +1,14 @@
+$ ./pipeline
+213
+$ ls /etc | wc -l
+213
+
+Parent write-end close removed:
+$ gcc -Wall -Wextra -Werror -o pipeline-broken pipeline-broken.c
+$ ./pipeline-broken
+(no output; still running after 2 seconds)
+$ ps -o pid,ppid,stat,cmd -p 61,63
+    PID    PPID STAT CMD
+     61       2 Ss   ./pipeline-broken
+     63      61 S    wc -l
+Stopped with SIGINT (Ctrl-C).

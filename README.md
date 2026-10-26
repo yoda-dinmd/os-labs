@@ -18,6 +18,8 @@ Laboratory submissions for **Operating Systems**, FCIM / FAF, Technical Universi
 | 4 | The xv6 Shell from the Outside | [Lab 4 PDF](reports/lab4.pdf) | [Sources and evidence](lab4/) · [LaTeX](lab4/lab4.tex) |
 | 5 | The File System with Your Own Hands | [Lab 5 PDF](reports/lab5.pdf) | [Submission overview](lab5/README.md) · [LaTeX](lab5/lab5.tex) |
 | 6 | Inside the xv6 File System | [Lab 6 PDF](reports/lab6.pdf) | [Submission overview](lab6/README.md) · [LaTeX](lab6/lab6.tex) |
+| 7 | Three Small Programs: Processes, Redirection, a Pipe | [Lab 7 PDF](reports/lab7.pdf) | [Sources and observations](lab7/) · [LaTeX](lab7/lab7.tex) |
+| 8 | The Same Calls, Inside Your Own OS | [Lab 8 PDF](reports/lab8.pdf) | [Sources and observations](lab8/) · [LaTeX](lab8/lab8.tex) |
 
 ## Repository organization
 

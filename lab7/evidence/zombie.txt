@@ -1,0 +1,10 @@
+$ ./zombie > /dev/null &
+$ sleep 2
+$ ps -o pid,ppid,stat,cmd -p 43,44
+    PID    PPID STAT CMD
+     43       2 S    ./zombie
+     44      43 Z    [ls] <defunct>
+
+After the parent has waited (20 seconds):
+$ ps -o pid,ppid,stat,cmd -p 43,44
+    PID    PPID STAT CMD

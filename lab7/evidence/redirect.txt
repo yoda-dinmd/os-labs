@@ -1,0 +1,7 @@
+$ ./redirect
+open gave descriptor 1
+done: the listing is in out.txt
+$ head -3 out.txt
+total 108
+-rw-r--r--. 1 victor victor     0 Oct 26 12:01 out.txt
+-rwxr-xr-x. 1 victor victor 20456 Oct 26 12:01 pipeline

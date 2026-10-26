@@ -1,0 +1,6 @@
+$ gcc --version | head -1
+gcc (SUSE Linux) 16.2.1 20260929
+$ gcc -Wall -Wextra -Werror -o run run.c
+$ gcc -Wall -Wextra -Werror -o zombie zombie.c
+$ gcc -Wall -Wextra -Werror -o redirect redirect.c
+$ gcc -Wall -Wextra -Werror -o pipeline pipeline.c

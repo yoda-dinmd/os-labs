@@ -1,0 +1,11 @@
+--- a/Makefile
++++ b/Makefile
+@@ -132,6 +132,8 @@
+ .PRECIOUS: %.o
+ 
+ UPROGS=\
++	$U/_run\
++	$U/_pingpong\
+ 	$U/_args\
+ 	$U/_sleep\
+ 	$U/_cat\

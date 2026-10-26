@@ -1,0 +1,20 @@
+qemu-system-riscv64 -machine virt -bios none -kernel kernel/kernel -m 128M -smp 1 -nographic -global virtio-mmio.force-legacy=false -drive file=fs.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+
+xv6 kernel is booting
+
+init: starting sh
+$ run
+parent: my pid is 3
+child: my pid is 4
+hello from the child
+parent: child 4 ended with status 0
+$ pingpong
+6: received ping
+5: received pong
+$ pingpong
+8: received ping
+7: received pong
+$ pingpong
+10: received ping
+9: received pong
+$ 
