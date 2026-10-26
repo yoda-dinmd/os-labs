@@ -36,7 +36,7 @@ The command \texttt{ls\ /} showed the usual top-level names, including
 \texttt{proc}, \texttt{tmp}, \texttt{usr} and \texttt{var}. The
 requested detailed listing was:
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ ls -ld /etc /etc/passwd /bin /dev/null /tmp
 lrwxrwxrwx.  1 root root    7 Mar  2  2026 /bin -> usr/bin
@@ -45,7 +45,8 @@ drwxr-xr-x.  1 root root 3654 Oct 12 15:12 /etc
 -rw-r--r--.  1 root root 2202 Oct  5 14:07 /etc/passwd
 drwxrwxrwt. 73 root root 3900 Oct 12 16:10 /tmp
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{File types in the Linux root hierarchy}
+\end{figure}
 
 The first character identifies \texttt{/etc} and \texttt{/tmp} as
 directories (\texttt{d}), \texttt{/etc/passwd} as a regular file
@@ -68,14 +69,15 @@ distinguishes block devices from character devices.
 
 \section{Comparing allocated space}\label{comparing-allocated-space}
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ du -sh /var/log 2>/dev/null
 320M    /var/log
 $ du -sh /usr 2>/dev/null
 13G     /usr
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Allocated space under /var/log and /usr}
+\end{figure}
 
 The visible allocation under \texttt{/usr} is approximately 42 times
 that under \texttt{/var/log}: \texttt{13\ *\ 1024\ /\ 320\ =\ 41.6}. The
@@ -95,7 +97,7 @@ and \textbf{Links: 1}. \texttt{Inode} identifies the inode within its
 filesystem; \texttt{Links} counts hard links to it. The sixth byte is
 the newline written by \texttt{echo}.
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ ln notes.txt hard.txt
 $ ls -li notes.txt hard.txt
@@ -107,7 +109,8 @@ hello
 $ ls -li hard.txt
 468755 -rw-r--r--. 1 victor victor 6 Oct 12 16:10 hard.txt
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Hard-link identity before and after unlinking}
+\end{figure}
 
 Both names refer to the same inode and the same data. Removing
 \texttt{notes.txt} removes that directory entry and reduces the link
@@ -119,7 +122,7 @@ optional experiment below demonstrates this.
 \section{Symbolic links store a
 pathname}\label{symbolic-links-store-a-pathname}
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ ln -s hard.txt soft.txt
 $ ls -li hard.txt soft.txt
@@ -133,7 +136,8 @@ cat: soft.txt: No such file or directory
 $ ls -l soft.txt
 lrwxrwxrwx. 1 victor victor 8 Oct 12 16:10 soft.txt -> hard.txt
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Symbolic-link identity and target lookup}
+\end{figure}
 
 The symbolic link has its own inode, 468756. Its length is exactly
 \textbf{8 bytes}, the number of characters in \texttt{hard.txt}, with no
@@ -153,7 +157,7 @@ for \texttt{d} and \texttt{d/.} account for two, and \texttt{d/x/..} and
 
 The actual Btrfs result differs:
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ mkdir d; ls -ld d
 drwxr-xr-x. 1 victor victor 0 Oct 12 16:10 d
@@ -162,7 +166,8 @@ drwxr-xr-x. 1 victor victor 4 Oct 12 16:10 d
 $ stat -f -c 'work filesystem: %T, block size %S' .
 work filesystem: btrfs, block size 4096
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Directory link counts on Btrfs}
+\end{figure}
 
 The link-count column remains \textbf{1}. The final \texttt{4} is the
 directory's size column, not its link count. Btrfs does not expose the
@@ -173,7 +178,7 @@ laptop's measurement must be reported as 1 and 1.
 \section{Logical length and allocated
 storage}\label{logical-length-and-allocated-storage}
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ echo x > one.txt; ls -l one.txt; du -h one.txt
 -rw-r--r--. 1 victor victor 2 Oct 12 16:10 one.txt
@@ -182,7 +187,8 @@ $ truncate -s 1G big.img; ls -lh big.img; du -h big.img
 -rw-r--r--. 1 victor victor 1.0G Oct 12 16:10 big.img
 0       big.img
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Logical size and allocated space}
+\end{figure}
 
 \texttt{one.txt} contains \texttt{x} and a newline but its reported
 allocation occupies a 4096-byte unit. The sparse file has a logical
@@ -214,7 +220,7 @@ Octal & Permissions & Example use \\
 \end{longtable}
 }
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ echo secret > s.txt
 $ chmod 600 s.txt; ls -l s.txt
@@ -224,7 +230,8 @@ cat: s.txt: Permission denied
 $ chmod u+r s.txt; cat s.txt
 secret
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Read access under different file modes}
+\end{figure}
 
 An ordinary owner's access is checked against the owner permission bits.
 Ownership permits changing the mode, but it does not itself grant read
@@ -233,7 +240,7 @@ the file to be read again.
 
 \section{The creation mask}\label{the-creation-mask}
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ umask
 0022
@@ -241,7 +248,8 @@ $ touch new.txt; mkdir newdir; ls -ld new.txt newdir
 -rw-r--r--. 1 victor victor 0 Oct 12 16:10 new.txt
 drwxr-xr-x. 1 victor victor 0 Oct 12 16:10 newdir
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Creation modes under umask 0022}
+\end{figure}
 
 With no overriding default ACL, the creation mode is the requested mode
 with the mask bits cleared. A normal file starts from \texttt{0666},
@@ -257,7 +265,7 @@ Before each test, the prediction distinguished listing names from
 looking up a known name. The file \texttt{box/f} was created with
 \texttt{echo\ hi\ \textgreater{}\ box/f}.
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ chmod u=r,go= box; ls box; cat box/f
 f
@@ -267,7 +275,8 @@ ls: cannot open directory 'box': Permission denied
 hi
 $ chmod 755 box
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Directory read and search permissions}
+\end{figure}
 
 Directory \textbf{read} permission permits enumerating entry names.
 Directory \textbf{execute}, also called search permission, permits
@@ -281,7 +290,7 @@ creating and removing entries.
 \section{Set-user-ID, the sticky bit and protected
 files}\label{set-user-id-the-sticky-bit-and-protected-files}
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ ls -l /usr/bin/passwd
 -rwsr-xr-x. 1 root shadow 97408 Aug 10 09:57 /usr/bin/passwd
@@ -292,7 +301,8 @@ cat: /etc/shadow: Permission denied
 $ ls -l /etc/shadow
 -rw-r-----. 1 root shadow 977 Oct 5 14:07 /etc/shadow
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Set-user-ID, sticky bit and protected-file access}
+\end{figure}
 
 The denied read was recorded in an earlier check as the same ordinary user.
 The final run also confirmed that the file was not readable.
@@ -319,7 +329,7 @@ files}\label{disks-and-the-kernel-as-files}
 following layout. All partitions belong to the same 931.5 GiB NVMe disk;
 repeated Btrfs mountpoints are not additional disks.
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 nvme0n1                 931.5G  disk
 |-- nvme0n1p1   vfat      200M  /boot/efi
@@ -329,19 +339,21 @@ nvme0n1                 931.5G  disk
 |-- nvme0n1p5   btrfs   685.2G  /, /home, /var, ...
 `-- nvme0n1p6   swap        2G  [SWAP]
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{NVMe disk partitions and mount points}
+\end{figure}
 
 The root mount is \texttt{/dev/nvme0n1p5}, filesystem type
 \textbf{Btrfs}, with \texttt{rw} in its mount options. The selected root
 subvolume is \texttt{/@/.snapshots/40/snapshot}, subvolume ID 303. The
 \texttt{df\ -h} row was:
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/nvme0n1p5  686G   80G  605G  12% /
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Root filesystem usage}
+\end{figure}
 
 Thus root was \textbf{12\% full}, using approximately 80 GiB, with 605
 GiB available. Human-readable rounding explains why the displayed sizes
@@ -350,7 +362,7 @@ need not add exactly.
 \section{CPU, memory and the meaning of
 self}\label{cpu-memory-and-the-meaning-of-self}
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ grep -c processor /proc/cpuinfo
 8
@@ -365,7 +377,8 @@ State:  R (running)
 Tgid:   842397
 Ngid:   0
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{CPU, memory and process information}
+\end{figure}
 
 The processor count establishes \textbf{8 logical CPUs}, not necessarily
 eight physical cores; simultaneous multithreading can expose multiple
@@ -387,7 +400,7 @@ live kernel views, not ordinary stored files.
 \section{File signatures rather than
 suffixes}\label{file-signatures-rather-than-suffixes}
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ gzip -c /etc/passwd > notes.txt
 $ file notes.txt
@@ -395,7 +408,8 @@ notes.txt: gzip compressed data, was "passwd", ...
 $ xxd notes.txt | head -1
 00000000: 1f8b 0808 f584 c36a 0003 7061 7373 7764  .......j..passwd
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Gzip identification from file contents}
+\end{figure}
 
 The first two bytes, \textbf{1f 8b}, are the gzip signature. The next
 byte, \texttt{08}, denotes the DEFLATE compression method. The
@@ -406,7 +420,7 @@ fields; the complete output is in the transcript.
 \section{Removing a file that remains
 open}\label{removing-a-file-that-remains-open}
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ printf 'open file remains readable\n' > bigfile
 $ exec 3< bigfile
@@ -418,7 +432,8 @@ $ cat <&3
 open file remains readable
 $ exec 3<&-
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Reading an unlinked file through an open descriptor}
+\end{figure}
 
 The shell expands \texttt{\$\$} to its own process ID, so this time the
 directory describes the shell's descriptors. The link ends in

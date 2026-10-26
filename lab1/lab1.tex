@@ -39,7 +39,8 @@ The operating system mediates between programs and hardware by allocating
 resources and enforcing access rules. This laboratory follows the four
 resource-management areas in the course handout: files, processes, memory,
 and devices~\cite{handout}. The work was performed through the terminal in an
-Ubuntu VM. Figures throughout the report are the student's captured outputs.
+Ubuntu VM. The root-directory experiment also uses the openSUSE Tumbleweed
+host, identified in its command transcript.
 
 The VM uses account \code{victor}, hostname \code{oscourse}, and the
 \code{7.0.0-34-generic} Linux kernel on x86-64. The initial capture shows seven
@@ -64,9 +65,20 @@ Figure~\ref{fig:directories} shows these listings.
 
 Two directories directly under the root are \code{/etc}, which contains
 system configuration, and \code{/home}, which contains users' home
-directories. The captured directory commands show the home and
-\code{/etc} contents; a direct listing of \code{/} was not captured.
+directories. The home and \code{/etc} listings show personal files and
+system configuration entries respectively.
 \screenshot{L1_02_directories.png}{Working, home, and configuration directory listings}{fig:directories}
+
+The root-directory commands were run on the openSUSE Tumbleweed host.
+The working directory is \path{/home/victor/Projects/os-labs/lab1}.
+The listing shows the top-level directories and their ownership and modes;
+\code{/bin} is a symbolic link to \code{usr/bin} on this host.
+\begin{figure}[H]
+\lstinputlisting{evidence/root-directory.txt}
+\caption{Working directory and root hierarchy on the openSUSE host}
+\label{fig:root-directory}
+\end{figure}
+
 
 \section{Creation, copying, renaming, and removal}
 The command \code{echo} created \code{note.txt} containing
@@ -197,5 +209,5 @@ The observations demonstrate permission enforcement, process termination,
 kernel-exposed process state, and the association between a mounted
 filesystem and its device. Process counts and memory use varied between
 captures, as expected for a running system. All reported measurements are
-taken from the supplied terminal screenshots.
+recorded in the terminal screenshots and command transcript.
 \end{document}

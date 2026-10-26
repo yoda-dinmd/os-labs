@@ -61,24 +61,16 @@ In the captured checkout, `sys_read(void)` is at **line 69 of `kernel/sysfile.c`
 
 ![Program source](screenshots/L2_09_sleep_code.png)
 
-The Makefile capture adds `$U/_sleep\` to `UPROGS`, but removes the blank line before `fs.img:`. Because the last entry ends with a continuation backslash, that separator must be restored. [Makefile.patch](Makefile.patch) records the intended change against an unmodified matching Makefile, including the separator.
+The [Makefile](Makefile) registers `$U/_sleep` in `UPROGS` and separates the list from the `fs.img` target with a blank line. [Command output](evidence/makefile.txt) shows the list and target.
 
-![Captured Makefile edit requiring correction](screenshots/L2_10_makefile.png)
+### Build and execution
 
-### Captured runtime validation
+The submitted Makefile and source were built with xv6 revision `06aad25c735fd3159bdfae5680be4eab7b1668b2` on openSUSE. The [build transcript](evidence/build.txt) records kernel and filesystem-image creation. The [QEMU transcript](evidence/sleep-runtime.txt) records the boot and these calls:
 
-![Sleep runtime tests](screenshots/L2_11_sleep_test.png)
-
-![Successful extra-argument check](screenshots/fixed2.png)
-
-The runtime screenshots show:
-
-| Command | Observed result |
+| Command | Result |
 | --- | --- |
-| `echo before` | Prints `before`. |
-| `sleep 10` | Returns to the shell without an error message. |
-| `echo after` | Prints `after`. |
-| `sleep` | Prints `usage: sleep <ticks>`, confirming the no-argument check. |
-| `sleep 10 20` | The follow-up `fixed2.png` shows `usage: sleep <ticks>`, confirming the extra-argument check. |
+| `sleep 10` | Returns between the messages `before` and `after`. |
+| `sleep` | Prints `usage: sleep <ticks>`. |
+| `sleep 10 20` | Prints `usage: sleep <ticks>`. |
 
-The follow-up confirms the expected extra-argument behavior. The earlier capture recorded `exec sleep failed` for the same command; its cause was not established, but the repeated check now succeeds. Both invalid argument counts produce the usage message, matching the supplied source's `argc != 2` check. The screenshot demonstrates that the custom executable can run, but does not measure its pause duration or show its exit status. The earlier Makefile screenshot still depicts the edit before restoring the blank separator; the supplied patch records the correct layout. The full xv6 source tree and actual VM Makefile were not supplied, so this repository does not claim a local build test.
+The transcript shows execution and argument-count handling; it does not measure elapsed ticks or display exit statuses.

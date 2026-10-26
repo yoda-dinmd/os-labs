@@ -171,33 +171,32 @@ The executable was added to the \code{UPROGS} list as follows:
 
 fs.img: mkfs/mkfs README $(UPROGS)
 \end{lstlisting}
-The actual Makefile entries use tab indentation. A blank line is preserved
-before \code{fs.img:} because the final list entry ends with a continuation
-backslash. Figure~\ref{fig:makefile} records an earlier edit in which this
-separator had been removed; that capture is not a representation of the
-correct final layout. The repository includes \code{Makefile.patch} with
-the intended registration and separator.
-\screenshot{L2_10_makefile.png}{Earlier Makefile edit before restoring the blank separator}{fig:makefile}
+The Makefile entries use tab indentation. A blank line separates
+\code{UPROGS} from the \code{fs.img} target. The complete \code{Makefile}
+and \code{user/sleep.c} accompany this laboratory.
+\begin{figure}[H]
+\lstinputlisting{evidence/makefile.txt}
+\caption{UPROGS and the filesystem image target}
+\label{fig:makefile}
+\end{figure}
 
-\section{Observed runtime results}
-The runtime sequence printed \code{before}, ran \code{sleep 10}, and then
-printed \code{after}. The valid call returned to the shell without an error
-message. Running \code{sleep} without arguments printed the usage message.
-Figure~\ref{fig:sleep-test} shows these results and an earlier failed
-extra-argument attempt.
-\screenshot[0.60\textwidth]{L2_11_sleep_test.png}{Valid call, missing-argument check, and earlier failed attempt}{fig:sleep-test}
+\section{Build and execution}
+The submitted Makefile and sleep source were built with xv6 revision
+\code{06aad25c735f} on the openSUSE host.
+The build produced the kernel and filesystem image, which booted in QEMU.
+The build transcript is retained in \code{evidence/build.txt}.
 
-The repeated command \code{sleep 10 20} printed
-\code{usage: sleep <ticks>}, as shown in Figure~\ref{fig:extra-args}.
-Both invalid argument counts therefore produced the expected message.
-The earlier \code{exec sleep failed} result was superseded by this successful
-repeat; its cause was not established by the captures.
-\screenshot[0.55\textwidth]{fixed2.png}{Successful extra-argument usage check}{fig:extra-args}
-
-The screenshots show execution and argument-count handling, but do not
-measure the pause duration or expose exit statuses. No independent rebuild
-was performed from this report repository because it contains the user
-program and registration patch rather than the full xv6 source tree.
+The command \code{sleep 10} returned to the shell between the messages
+\code{before} and \code{after}. Both \code{sleep} and
+\code{sleep 10 20} printed \code{usage: sleep <ticks>}.
+These calls exercise the valid input and both invalid argument counts.
+\begin{figure}[H]
+\lstinputlisting{evidence/sleep-runtime.txt}
+\caption{Sleep execution and argument-count handling in xv6}
+\label{fig:sleep-test}
+\end{figure}
+The transcript records program execution and diagnostics. It does not
+measure the pause duration or display the program's exit status.
 
 \utmconclusions
 xv6 booted successfully in QEMU and provided working file-reading, output,
@@ -206,7 +205,7 @@ and pipeline commands. Inspecting both \code{user/cat.c} and
 with their privileged kernel handlers.
 
 The added \code{sleep} program uses the checkout's \code{pause} system
-call and is accompanied by a build-registration patch. The captured runtime
+call and is included in the submitted Makefile. The runtime
 results show a valid call returning and the expected usage messages for
 missing and extra arguments. The repository containing the reports,
 screenshots, and program is \expandafter\url\expandafter{\CourseRepository}.

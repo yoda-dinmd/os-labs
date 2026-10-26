@@ -1,0 +1,14 @@
+xv6 kernel is booting
+
+init: starting sh
+$ echo before
+before
+$ sleep 10
+$ echo after
+after
+$ sleep
+usage: sleep <ticks>
+$ sleep 10 20
+usage: sleep <ticks>
+$ QEMU: Terminated
+

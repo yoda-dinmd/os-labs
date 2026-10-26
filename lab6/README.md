@@ -17,5 +17,3 @@ This laboratory examines xv6 directory entries, inode metadata, hard links and f
 The programs were built and tested on xv6 revision `06aad25c735fd3159bdfae5680be4eab7b1668b2`. Tests cover the required fresh-image examples, hard-link counts, missing paths, full-length directory names, deleted directory slots, 19 nested directories and 24 sibling directories.
 
 The full Makefile retains the earlier `args` and `sleep` utilities; their sources are included in `user/` for a complete build. The focused patch applies to the corresponding Lab 4 Makefile.
-
-Setup and compilation instructions are available in the [repository README](../README.md#reproducing-program-experiments).

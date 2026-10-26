@@ -40,7 +40,7 @@ identity}\label{file-types-and-root-identity}
 
 The first \texttt{ls} produced the following selected entries:
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ ls
 .              1 1 1024
@@ -49,7 +49,8 @@ README         2 2 2441
 cat            2 7 35368
 console        3 27 0
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Directory listing with types, inode numbers and sizes}
+\end{figure}
 
 The columns are name, type, inode number and size in bytes.
 \texttt{kernel/stat.h} defines \textbf{1 as a directory}
@@ -66,7 +67,7 @@ requirements.
 
 \section{An empty directory}\label{an-empty-directory}
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ mkdir a
 $ ls a
@@ -75,7 +76,8 @@ $ ls a
 $ mystat a
 a: directory, inode 28, links 1, size 32 bytes
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Entries and size of an empty directory}
+\end{figure}
 
 A directory entry consists of a two-byte \texttt{ushort\ inum} and a
 14-byte name array, so \texttt{sizeof(struct\ dirent)} is \textbf{16
@@ -113,7 +115,7 @@ continuation lines for \texttt{\$U/\_mystat} and \texttt{\$U/\_find} in
 \section{Metadata before and after
 linking}\label{metadata-before-and-after-linking}
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ mystat README . console
 README: file, inode 2, links 1, size 2441 bytes
@@ -129,7 +131,8 @@ r2: file, inode 2, links 1, size 2441 bytes
 $ cat r2 | wc
 48 336 2441
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Hard-link counts before and after unlinking}
+\end{figure}
 
 Creating \texttt{r2} adds a second directory entry pointing to inode 2
 and increases its link count from 1 to 2. Removing \texttt{README}
@@ -148,7 +151,7 @@ entries.
 
 Error handling was also observed:
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ mystat missing r2
 mystat: cannot stat missing
@@ -156,7 +159,8 @@ r2: file, inode 2, links 1, size 2441 bytes
 $ mystat
 usage: mystat <path> [path ...]
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Metadata lookup diagnostics}
+\end{figure}
 
 \section{Unlinking and freeing
 blocks}\label{unlinking-and-freeing-blocks}
@@ -225,7 +229,7 @@ The constants in \texttt{kernel/fs.h} are \texttt{BSIZE\ =\ 1024},
 \texttt{NDIRECT\ =\ 12}, \texttt{NINDIRECT\ =\ BSIZE\ /\ sizeof(uint)}
 and \texttt{DIRSIZ\ =\ 14}.
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ mkdir averyveryverylongname
 $ ls
@@ -234,7 +238,8 @@ $ mystat averyveryverylongname averyveryveryl
 averyveryverylongname: directory, inode 29, links 1, size 32 bytes
 averyveryveryl: directory, inode 29, links 1, size 32 bytes
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Directory-name length and lookup}
+\end{figure}
 
 The \texttt{ls} excerpt selects the newly created directory. Its stored
 name is \textbf{\texttt{averyveryveryl}}, the first 14 characters.
@@ -248,13 +253,14 @@ directory entry, which matters when passing it to string functions.
 One indirect block holds \texttt{1024\ /\ 4\ =\ 256} block addresses.
 Together with twelve direct blocks, the inode addresses 268 data blocks:
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 NINDIRECT = 1024 / 4 = 256
 MAXFILE   = 12 + 256 = 268 data blocks
 maximum   = 268 * 1024 = 274432 bytes = 268 KiB
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Maximum file-size calculation}
+\end{figure}
 
 This is the structural maximum file-data length. The indirect-address
 block consumes another disk block but does not add to the file's logical
@@ -266,12 +272,13 @@ not a claim that a maximum-size file was written during this exercise.
 
 The clean build printed:
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 nmeta 47 (boot, super, log blocks 31, inode blocks 13, bitmap blocks 1) blocks 1953 total 2000
 balloc: first 1102 blocks have been allocated
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Filesystem allocation reported by mkfs}
+\end{figure}
 
 The disk contains \textbf{2000 blocks}, each 1024 bytes, for
 \textbf{2,048,000 bytes} overall. Its contiguous layout is:
@@ -344,7 +351,7 @@ After exiting QEMU, \texttt{make\ clean} and a new build created a fresh
 image, removing the earlier README-link experiment. The required
 commands then produced:
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ mkdir a
 $ mkdir a/b
@@ -358,7 +365,8 @@ $ find . r2
 $ find a b
 a/b
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Recursive filename search}
+\end{figure}
 
 All three matching files were found, and searching for \texttt{b} found
 the matching directory. Excluding \texttt{.} and \texttt{..} prevents
@@ -368,7 +376,7 @@ and newline, while the root \texttt{r2} is a hard link to the executable
 
 \section{Optional inode numbers}\label{optional-inode-numbers}
 
-\noindent\begin{minipage}{\linewidth}
+\begin{figure}[H]
 \begin{lstlisting}
 $ find . r2 -n
 ./a/b/r2 30
@@ -380,7 +388,8 @@ r2: file, inode 7, links 2, size 35368 bytes
 a/r2: file, inode 31, links 1, size 2 bytes
 a/b/r2: file, inode 30, links 1, size 2 bytes
 \end{lstlisting}
-\end{minipage}\par\medskip
+\caption{Matching paths and inode identities}
+\end{figure}
 
 Only \textbf{\texttt{./r2}} is the same file as \texttt{cat}: both
 identify inode 7 and report two links. The other two paths have distinct

@@ -12,7 +12,7 @@ The files belong to user `victor` and group `victor`. Creating `note.txt`, copyi
 
 After `chmod 600 note.txt`, the mode is `-rw-------`. The first character identifies a regular file; the next three give the owner read and write permission without execute permission; the remaining two groups of three give the group and other users no permissions. `chmod 644` restores `-rw-r--r--`.
 
-Two directories directly beneath `/` are `/etc`, containing system configuration, and `/home`, containing users' home directories. The screenshots show an `/etc` listing and the path `/home/victor/os-lab1`; a direct `ls -la /` listing was not captured.
+Two directories directly beneath `/` are `/etc`, containing system configuration, and `/home`, containing users' home directories. The Ubuntu screenshots show the home and `/etc` directories. The [root-directory transcript](evidence/root-directory.txt) records `pwd` and `ls -la /` on the openSUSE Tumbleweed host, where `/bin` points to `usr/bin`.
 
 ![Directories](screenshots/L1_02_directories.png)
 ![File operations](screenshots/L1_03_files.png)

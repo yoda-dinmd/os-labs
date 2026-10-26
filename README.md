@@ -12,8 +12,8 @@ Laboratory submissions for **Operating Systems**, FCIM / FAF, Technical Universi
 
 | Lab | Topic | PDF report | Supporting materials |
 |---|---|---|---|
-| 1 | The OS as a Resource Manager | [Lab 1 PDF](reports/lab1.pdf) | [Notes](lab1%262/report.md) · [LaTeX](lab1%262/lab1.tex) |
-| 2 | Meet the OS You Will Build | [Lab 2 PDF](reports/lab2.pdf) | [Notes](lab1%262/notes.md) · [LaTeX](lab1%262/lab2.tex) |
+| 1 | The OS as a Resource Manager | [Lab 1 PDF](reports/lab1.pdf) | [Notes](lab1/report.md) · [LaTeX](lab1/lab1.tex) |
+| 2 | Meet the OS You Will Build | [Lab 2 PDF](reports/lab2.pdf) | [Notes](lab2/notes.md) · [LaTeX](lab2/lab2.tex) |
 | 3 | Bash commands and log processing | [Lab 3 PDF](reports/lab3.pdf) | [Sources and evidence](lab3/) · [LaTeX](lab3/lab3.tex) |
 | 4 | The xv6 Shell from the Outside | [Lab 4 PDF](reports/lab4.pdf) | [Sources and evidence](lab4/) · [LaTeX](lab4/lab4.tex) |
 | 5 | The File System with Your Own Hands | [Lab 5 PDF](reports/lab5.pdf) | [Submission overview](lab5/README.md) · [LaTeX](lab5/lab5.tex) |
@@ -26,7 +26,8 @@ reports/             Compiled PDF reports for Labs 1–6
 metadata.tex         Shared student, course and instructor information
 build-reports.sh     PDF compilation script
 latex/               Shared UTM report class, formatting and logo
-lab1&2/              Labs 1–2 reports, sleep utility and screenshots
+lab1/                Linux resource-management report and evidence
+lab2/                xv6 report, sleep utility, Makefile and evidence
 lab3/                Bash scripts, reports and command evidence
 lab4/                xv6/Linux utilities, reports and command evidence
 lab5/                Linux filesystem report and command evidence

@@ -1,0 +1,19 @@
+--- a/Makefile
++++ b/Makefile
+@@ -46,6 +46,8 @@
+ 	then echo 'riscv64-linux-gnu-'; \
+ 	elif riscv64-unknown-linux-gnu-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
+ 	then echo 'riscv64-unknown-linux-gnu-'; \
++	elif riscv64-suse-linux-objdump -i 2>&1 | grep 'elf64-big' >/dev/null 2>&1; \
++	then echo 'riscv64-suse-linux-'; \
+ 	else echo "***" 1>&2; \
+ 	echo "*** Error: Couldn't find a riscv64 version of GCC/binutils." 1>&2; \
+ 	echo "*** To turn off this error, run 'gmake TOOLPREFIX= ...'." 1>&2; \
+@@ -130,6 +132,7 @@
+ .PRECIOUS: %.o
+ 
+ UPROGS=\
++	$U/_sleep\
+ 	$U/_cat\
+ 	$U/_echo\
+ 	$U/_forktest\
