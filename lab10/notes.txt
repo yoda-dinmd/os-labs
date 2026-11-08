@@ -1,0 +1,6 @@
+Part 3 answers
+
+1. Mask 32 enables bit 5, which is SYS_read. grep still calls open (15) and close (21), but their bits are not selected, so those calls are not printed.
+2. The line `np->trace_mask = p->trace_mask;` in fork() copies the setting to each child, so children created during the fork stress test keep tracing fork calls.
+3. echo writes twice: once for `hi` and once for the newline. The trace message is printed after the first write returns and before the second write, so it appears between `hi` and the newline.
+4. The mask is `(1 << 15) | (1 << 21) = 2,129,920`.

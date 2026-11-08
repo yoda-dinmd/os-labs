@@ -1,0 +1,60 @@
+\documentclass{../latex/utmreport}
+\newcommand{\ReportTitle}{Lab 9: Watching System Calls with strace}
+\input{../latex/report-common.tex}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\begin{document}
+\makeutmreporttitlepage
+\tableofcontents
+\clearpage
+\begin{utmabstract}[Abstract]
+Linux system-call activity was observed with \texttt{strace}, first for the \texttt{ls -l} command and then for a C program that opens, writes and reads a file. The experiments identify the calls used for terminal output, explain file descriptor allocation, and interpret the selected system-call count.
+\utmkeywords{Linux, system calls, strace, openat, read, write, file descriptors}
+\end{utmabstract}
+\utmintroduction
+
+This laboratory observes the system-call boundary on Linux. The first experiment traces \texttt{ls -l} while filtering \texttt{openat}, \texttt{read}, \texttt{write} and \texttt{close}. The second uses a small C program to create \texttt{note.txt}, write ``hello, kernel'' to it, read it back and display the result. The program was compiled with GCC using \texttt{-Wall -Wextra}.
+
+For the filtered \texttt{ls -l} pipeline, \texttt{wc -l} counted 187 displayed calls. This is an observed count for the selected call types and this machine, not a count of every system call made by the process. The accompanying screenshots and full \texttt{strace} excerpt are in the lab directory.
+
+\chapter{Tracing a real command}
+
+\section{Output and directory reads}
+
+The trace shows \texttt{ls} printing the listing with \texttt{write(1,\ldots)}. Descriptor 1 is standard output, which is the terminal in the direct run. In the counting pipeline, shell redirection sends standard output to \texttt{/dev/null}; the trace itself is redirected to standard error and piped to \texttt{wc -l}.
+
+The trace also includes \texttt{openat}, \texttt{read} and \texttt{close} calls as \texttt{ls} accesses directory and locale data. Several optional locale-catalog lookups return \texttt{ENOENT}. These are unsuccessful probes for files that are absent in the environment; they do not show recursive directory traversal. \texttt{ls -l} without a recursive option lists the requested directory only.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.96\linewidth]{pic1.png}
+\caption{Selected calls from \texttt{strace} and the 187-line filtered count}
+\end{figure}
+
+\chapter{A program that calls the kernel}
+
+\section{Writing and reading a file}
+
+The submitted \texttt{syscalls.c} calls \texttt{open} with \texttt{O\_CREAT | O\_WRONLY | O\_TRUNC}, writes the 14-byte message, closes the descriptor, then opens the file read-only and reads it back. The program prints:
+
+\begin{lstlisting}
+open returned descriptor 3
+write sent 14 bytes
+read got 14 bytes: hello, kernel
+\end{lstlisting}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{pic2.png}
+\caption{Output from the direct system-call program}
+\end{figure}
+
+\section{Interpreting the trace}
+
+The trace shows the file operations as \texttt{openat}, \texttt{write}, \texttt{close}, \texttt{openat}, \texttt{read} and \texttt{close}. The C library's \texttt{open} wrapper uses Linux's \texttt{openat} system call. Before the program accesses \texttt{note.txt}, the dynamic loader also opens and reads shared-library files.
+
+The first file descriptor is 3 because descriptors 0, 1 and 2 are already assigned to standard input, standard output and standard error. Linux allocates the lowest available descriptor, so the next open receives 3. Closing it makes the descriptor available again; the read-only open can reuse descriptor 3.
+
+\utmconclusions
+
+\texttt{strace} makes the boundary between library-level operations and kernel calls visible. In this run, \texttt{write} to descriptor 1 emitted the directory listing, and the filtered command produced 187 trace lines. The file experiment showed how open, write, read and close operate through descriptors, with 3 selected as the lowest free descriptor after the standard streams.
+\end{document}

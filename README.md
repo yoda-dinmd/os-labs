@@ -20,11 +20,13 @@ Laboratory submissions for **Operating Systems**, FCIM / FAF, Technical Universi
 | 6 | Inside the xv6 File System | [Lab 6 PDF](reports/lab6.pdf) | [Submission overview](lab6/README.md) · [LaTeX](lab6/lab6.tex) |
 | 7 | Three Small Programs: Processes, Redirection, a Pipe | [Lab 7 PDF](reports/lab7.pdf) | [Sources and observations](lab7/) · [LaTeX](lab7/lab7.tex) |
 | 8 | The Same Calls, Inside Your Own OS | [Lab 8 PDF](reports/lab8.pdf) | [Sources and observations](lab8/) · [LaTeX](lab8/lab8.tex) |
+| 9 | Watching System Calls with `strace` (Linux) | [Lab 9 PDF](reports/lab9.pdf) | [Submission overview](lab9/README.md) · [LaTeX](lab9/lab9.tex) |
+| 10 | Add Your Own System Call: `trace` (xv6 on RISC-V) | [Lab 10 PDF](reports/lab10.pdf) | [Submission overview and patch](lab10/README.md) · [LaTeX](lab10/lab10.tex) |
 
 ## Repository organization
 
 ```text
-reports/             Compiled PDF reports for Labs 1–6
+reports/             Compiled PDF reports for Labs 1–10
 metadata.tex         Shared student, course and instructor information
 build-reports.sh     PDF compilation script
 latex/               Shared UTM report class, formatting and logo
@@ -34,4 +36,8 @@ lab3/                Bash scripts, reports and command evidence
 lab4/                xv6/Linux utilities, reports and command evidence
 lab5/                Linux filesystem report and command evidence
 lab6/                xv6 filesystem utilities, report and command evidence
+lab7/                Linux process, redirection and pipe programs
+lab8/                xv6 process and pipe programs
+lab9/                Linux strace experiments and direct syscall program
+lab10/               xv6 RISC-V trace system call, patch and report
 ```
