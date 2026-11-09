@@ -1,6 +1,57 @@
-Part 3 answers
+# Lab 10: Add Your Own System Call: trace (xv6-riscv)
 
-1. Mask 32 enables bit 5, which is SYS_read. grep still calls open (15) and close (21), but their bits are not selected, so those calls are not printed.
-2. The line `np->trace_mask = p->trace_mask;` in fork() copies the setting to each child, so children created during the fork stress test keep tracing fork calls.
-3. echo writes twice: once for `hi` and once for the newline. The trace message is printed after the first write returns and before the second write, so it appears between `hi` and the newline.
-4. The mask is `(1 << 15) | (1 << 21) = 2,129,920`.
+## Goal (Scopul lucrării)
+The goal of this laboratory is to add a new system call, `trace` (syscall number 23), and a corresponding user-space utility (`user/trace.c`) to the xv6 RISC-V operating system kernel so that any process and its forked children can selectively log system calls they invoke according to a per-process bit mask.
+
+## Part 3 — Play with the mask (Commands and Outputs)
+
+### 3.1 All the calls (all bits on, mask 2147483647):
+```
+$ trace 2147483647 grep hello README
+4: syscall trace -> 0
+4: syscall exec -> 3
+4: syscall open -> 3
+4: syscall read -> 1023
+4: syscall read -> 965
+4: syscall read -> 453
+4: syscall read -> 0
+4: syscall close -> 0
+```
+
+### 3.2 Only fork (bit 1, mask 2), on a test that forks until the process table is full:
+```
+$ trace 2 usertests forkforkfork
+usertests starting
+test forkforkfork: 6: syscall fork -> 7
+7: syscall fork -> 8
+8: syscall fork -> 9
+8: syscall fork -> 10
+...
+8: syscall fork -> 67
+8: syscall fork -> -1
+OK
+ALL TESTS PASSED
+```
+
+### 3.3 Only write (bit 16, mask 65536):
+```
+$ trace 65536 echo hi
+hi69: syscall write -> 2
+
+69: syscall write -> 1
+```
+
+## Observe (Part 3 Answers)
+
+1. **In `trace 32 grep hello README` why do you see only `read`, and not `open` or `close`?**
+   Mask `32` is `2^5 = (1 << 5)`, which enables only bit 5 (`SYS_read = 5`). Although `grep` also calls `open` (`SYS_open = 15`) and `close` (`SYS_close = 21`) on `README`, bits 15 and 21 are `0` in mask `32`, so `(p->trace_mask >> num) & 1` evaluates to `0` for `open` and `close` and the kernel does not print them.
+
+2. **In `forkforkfork`, three different pids print lines. Which line of code from Part 2 makes that possible?**
+   The line `np->trace_mask = p->trace_mask;` inside `kfork()` / `fork()` in `kernel/proc.c` copies the parent process's `trace_mask` to every newly created child process (`np`). As a result, when `usertests` (PID 6) forks a test runner child (PID 7), and PID 7 forks worker children (PID 8, etc.) that themselves call `fork()` until the process table is full (`fork -> -1`), every descendant inherits `trace_mask = 2` and logs its own `fork` calls.
+
+3. **In `trace 65536 echo hi` the trace line is printed between `"hi"` and the new line. Why? (How many times does `echo` call `write`?)**
+   `echo hi` calls `write` **twice**: first `write(1, "hi", 2)` to print `"hi"`, and second `write(1, "\n", 1)` to print the trailing newline. Because the kernel prints the trace message in `syscall()` immediately *after* `syscalls[num]()` finishes, the first `write` outputs `hi` to the console, then `printk` immediately prints `69: syscall write -> 2` on the same console line before the second `write` outputs `\n` and triggers `69: syscall write -> 1`.
+
+4. **Which mask traces both `open` (15) and `close` (21), and nothing else?**
+   Setting bit 15 (`2^15 = 32768`) and bit 21 (`2^21 = 2097152`) gives:
+   `mask = (1 << 15) | (1 << 21) = 32768 + 2097152 = 2129920`.

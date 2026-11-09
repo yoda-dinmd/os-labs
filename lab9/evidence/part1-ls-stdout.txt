@@ -1,0 +1,10 @@
+total 416
+drwxrwxrwx. 1 victor victor     74 Nov  9 14:01 evidence
+-rw-r--r--. 1 victor victor   4033 Nov  8 21:00 lab9.tex
+-rw-r--r--. 1 victor victor    783 Nov  8 21:01 notes.md
+-rw-r--r--. 1 victor victor     14 Nov  9 14:01 note.txt
+-rw-r--r--. 1 victor victor 360410 Nov  8 12:42 pic1.png
+-rw-r--r--. 1 victor victor  21159 Nov  8 13:33 pic2.png
+-rw-r--r--. 1 victor victor    693 Nov  8 21:00 README.md
+-rwxr-xr-x. 1 victor victor  20400 Nov  8 12:50 syscalls
+-rw-r--r--. 1 victor victor    984 Nov  8 12:47 syscalls.c
