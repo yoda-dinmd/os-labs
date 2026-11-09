@@ -1,0 +1,43 @@
+=== run 1 ===
+one: I have A, I want B
+two: I have B, I want A
+exit code: 124
+=== run 2 ===
+one: I have A, I want B
+two: I have B, I want A
+exit code: 124
+=== run 3 ===
+one: I have A, I want B
+two: I have B, I want A
+exit code: 124
+=== run 4 ===
+one: I have A, I want B
+two: I have B, I want A
+exit code: 124
+=== run 5 ===
+one: I have A, I want B
+two: I have B, I want A
+exit code: 124
+=== run 6 ===
+one: I have A, I want B
+two: I have B, I want A
+exit code: 124
+=== run 7 ===
+one: I have A, I want B
+two: I have B, I want A
+exit code: 124
+=== run 8 ===
+one: I have A, I want B
+two: I have B, I want A
+exit code: 124
+=== run 9 ===
+one: I have A, I want B
+two: I have B, I want A
+exit code: 124
+=== run 10 ===
+one: I have A, I want B
+one: I have both
+two: I have B, I want A
+two: I have both
+done
+exit code: 0

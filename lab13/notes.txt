@@ -1,0 +1,83 @@
+# Lab 13: Semaphores in Your Own Kernel (xv6-riscv)
+
+## Goal (Scopul lucrării)
+The goal of this laboratory is to build counting semaphores directly inside the xv6 RISC-V kernel as three new system calls—`sem_init` (24), `sem_down` (25), and `sem_up` (26)—plus the optional `sem_trydown` (27), using a kernel semaphore table (`sems[NSEM]`), per-semaphore spinlocks, and two-step kernel sleeping (`sleep_prepare` + `sleep` / `wakeup`), and to verify process ordering, ping-pong turn-taking (`semtest`), and critical-section line printing (`mix` and `mix lock`).
+
+## Check 1 — Before the kernel handlers (`semtest`)
+```
+$ semtest
+3 semtest: unknown sys call 24
+4 semtest: unknown sys call 25
+child: I ran after the parent
+parent: done, I let the child go
+```
+
+## Check 2 — Kernel semaphores working (`semtest`)
+```
+$ semtest
+parent: done, I let the child go
+child: I ran after the parent
+ping 1
+  pong 1
+ping 2
+  pong 2
+ping 3
+  pong 3
+semtest: OK
+```
+
+## Part 3 — A semaphore as a lock: `mix` and `mix lock`
+
+### Without the lock (`mix`):
+```
+$ mix
+AAAbAbbbbbbbbbbAbAbAbAbAbAbAbAbAbAAbAbAbbbbbbAAbAb
+AbbAbAbAbAbAbAbAbAbAb
+bAbAbAbAbAbAbAAbAbAbAbAAAAAAbbbbbbbb
+bbbAbAbbbAAAAAAbbAbbAAbbbbbbbAbAb
+bbbbbbbbbbA
+AbAbAAbAAbAbAAbAbbAbAAAbAAbbbAbAbAbAbAbAbAbAbAbAbAbAbAb
+bAbAbAbA
+AbAbAbAbbbbbbbbbbbbbAbAbAbAbAbAbAbAAbAAAbAbAbAbAbAbA
+AAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+```
+
+### With the lock (`mix lock`):
+```
+$ mix lock
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+```
+
+## Optional — Non-blocking `sem_trydown` (syscall 27, `trydowntest`)
+```
+$ trydowntest
+first sem_trydown(4): 0 (expected 0)
+second sem_trydown(4): -1 (expected -1)
+after sem_up, sem_trydown(4): 0 (expected 0)
+```
+
+## Observe (Part 3 Answers)
+
+1. **Without the lock, why do the letters mix? (How many system calls does one line cost?)**
+   `mix` prints one character at a time using `for (char *p = s; *p; p++) write(1, p, 1);`. Because each string (`"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"` and `"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"`) contains 30 letters plus 1 newline (`\n`), **one line costs 31 `write()` system calls**. Since `make qemu` runs xv6 on 3 virtual CPUs (`-smp 3`), the parent and child processes execute simultaneously on different harts (and can also be preempted by timer interrupts between any two `write()` calls). Although `consolesync` inside `write()` protects a single `write(1, p, 1)` call, nothing groups the 31 separate `write()` calls of a line together, so characters from the two processes interleave on the console.
+
+2. **With the lock every line is whole. Which two lines of `mix.c` make one line a critical section?**
+   The call `sem_down(3);` immediately before the character loop (`for (char *p = s; *p; p++) write(1, p, 1);`) and the call `sem_up(3);` immediately after that loop (enabled when `uselock` is non-zero). Because semaphore 3 is initialized to `1` (`sem_init(3, 1)`), only one process can hold semaphore 3 while executing all 31 `write()` system calls of a line; the other process sleeps in `sem_down(3)` until the entire line—including its trailing `\n`—has been printed and `sem_up(3)` is called.
+
+3. **In `sem_down` the test is `"while (s->value == 0)"`, not `"if"`. Why can a process wake up and still find 0?**
+   `wakeup(s)` in `sys_sem_up()` wakes up **every** process currently sleeping on channel `s` (and a third process that was not sleeping at all could also call `sem_down` and acquire `s->lock` before a woken process gets scheduled). If `sem_up` increments `s->value` from `0` to `1` and two processes wake up, the first woken process to acquire `s->lock` decrements `s->value` back to `0`. When the second woken process subsequently acquires `s->lock` and returns from `sleep()`, `s->value` is `0` again—so it must re-check in a `while (s->value == 0)` loop and go back to sleep rather than decrementing `s->value` below `0`.
+
+4. **`sem_down` calls `release(&s->lock)` BEFORE `sleep()`. What would go wrong if it slept holding the spinlock?**
+   Two fatal failures would occur:
+   - **Deadlock:** While the sleeping process holds `s->lock`, no other process on any CPU can ever acquire `s->lock` in `sys_sem_up()` to increment `s->value` and call `wakeup(s)`, so the sleeping process can never be woken up.
+   - **Kernel panic / disabled interrupts across context switch:** In xv6, `acquire()` disables hardware interrupts (`push_off()`) on the current CPU core and forbids calling `sched()` while holding any spinlock other than `p->lock` (`if(intr_get()) panic(...)` / `mycpu()->noff != 1` check in `sched()`), so sleeping while holding `s->lock` would either trigger an immediate kernel panic in `sched()` or leave interrupts disabled and freeze the CPU.

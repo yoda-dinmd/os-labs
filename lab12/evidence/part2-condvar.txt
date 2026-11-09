@@ -1,0 +1,3 @@
+B: not ready, I sleep
+A: message written
+B: I read "hello"

@@ -1,0 +1,3 @@
+counter = 1031820 (expected 2000000)
+counter = 1321476 (expected 2000000)
+counter = 1153608 (expected 2000000)

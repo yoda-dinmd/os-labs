@@ -1,0 +1,12 @@
+=== time ./race ===
+counter = 1125516 (expected 2000000)
+real 0.015s  user 0.025s  sys 0.001s
+=== time ./mutex ===
+counter = 2000000 (expected 2000000)
+real 0.157s  user 0.195s  sys 0.104s
+=== time ./sem ===
+counter = 2000000 (expected 2000000)
+real 0.454s  user 0.557s  sys 0.344s
+=== time ./atomic ===
+counter = 2000000 (expected 2000000)
+real 0.080s  user 0.154s  sys 0.001s

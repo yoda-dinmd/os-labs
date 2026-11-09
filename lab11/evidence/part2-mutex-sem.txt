@@ -1,0 +1,6 @@
+counter = 2000000 (expected 2000000)
+counter = 2000000 (expected 2000000)
+counter = 2000000 (expected 2000000)
+counter = 2000000 (expected 2000000)
+counter = 2000000 (expected 2000000)
+counter = 2000000 (expected 2000000)

@@ -1,0 +1,463 @@
+\documentclass{../latex/utmreport}
+\newcommand{\ReportTitle}{Lab 12: Producer, Consumer and the Other Tools}
+\input{../latex/report-common.tex}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\begin{document}
+\makeutmreporttitlepage
+\tableofcontents
+\clearpage
+\begin{utmabstract}[Abstract]
+The goal of this laboratory is to combine multiple POSIX synchronization primitives—counting semaphores, mutexes, and condition variables—to solve classic concurrency problems (bounded-buffer producer-consumer and readers-writers) and to construct, analyze, and eliminate a multi-mutex deadlock. In Part~1, two counting semaphores (\texttt{empty} initialized to~4, \texttt{full} initialized to~0) and a mutex coordinate a fast producer and a slow consumer around a 4-slot circular buffer (\texttt{prodcons.c}), and swapping the mutex lock ahead of \texttt{sem\_wait(\&empty)} demonstrates how holding a mutex while blocking on a semaphore causes a deadlock. In Part~2, a mutex, a state variable (\texttt{ready}), and a condition variable (\texttt{changed}) solve the writer-before-reader ordering problem (\texttt{condvar.c}) using a \texttt{while (!ready)} loop. In Part~3, two semaphores (\texttt{room} and \texttt{rlock}) allow three readers to read simultaneously while keeping writers exclusive (\texttt{readers.c}). In Part~4, an AB--BA lock-ordering deadlock (\texttt{deadlock.c}) is observed with \texttt{timeout} (exit code~124), tested without \texttt{sleep(1)}, and eliminated by acquiring mutex~\texttt{A} before mutex~\texttt{B} in both threads.
+\utmkeywords{Linux, pthreads, producer-consumer, bounded buffer, condition variable, readers-writers, starvation, deadlock, lock ordering}
+\end{utmabstract}
+\utmintroduction
+
+\section*{Goal of the laboratory (Scopul lucrării)}
+
+Whereas Lab~11 used one synchronization primitive at a time, the purpose of this laboratory work is to make multiple synchronization tools work together on Linux to solve classic operating-system concurrency problems and to study deadlock creation and removal. Specifically, the scope and objectives of the laboratory are:
+\begin{enumerate}
+\tightlist
+\item \textbf{Part 1 (Producer and consumer):} Build and run \texttt{prodcons.c}, where a fast producer inserts 8 items into a 4-slot circular buffer and a slow consumer removes them using two counting semaphores (\texttt{empty = 4}, \texttt{full = 0}) and a mutex (\texttt{lock}), and explain why locking \texttt{lock} before \texttt{sem\_wait(\&empty)} deadlocks when the buffer fills up.
+\item \textbf{Part 2 (The condition variable):} Build and run \texttt{condvar.c}, which solves the \texttt{order.c} problem using a boolean state variable (\texttt{ready}), a mutex (\texttt{lock}), and a condition variable (\texttt{changed}), and explain why \texttt{pthread\_cond\_wait} must be guarded by \texttt{while (!ready)} rather than \texttt{if (!ready)}.
+\item \textbf{Part 3 (Readers and writers):} Build and run \texttt{readers.c}, where two semaphores (\texttt{room} and \texttt{rlock}) and a shared counter (\texttt{readers}) allow multiple readers into the room together while writers enter alone, and explain the role of \texttt{rlock} and how continuous reader arrivals cause writer starvation.
+\item \textbf{Part 4 (Build a deadlock, then remove it):} Build and run \texttt{deadlock.c}, where two threads lock mutexes \texttt{A} and \texttt{B} in opposite order and hang (\texttt{exit code: 124} under \texttt{timeout 5}), test the original code with \texttt{sleep(1)} removed across 10 runs, and fix the deadlock permanently by locking \texttt{A} before \texttt{B} in both threads.
+\end{enumerate}
+
+All programs were compiled on Linux (openSUSE Tumbleweed, x86\_64) using \texttt{gcc -Wall -pthread}. Complete command transcripts are saved in \texttt{evidence/} and \texttt{report.md}.
+
+\chapter{Part 1: Producer and consumer}
+
+\section{Source code and execution of \texttt{prodcons.c}}
+
+In \texttt{prodcons.c}, a 4-slot circular buffer (\texttt{buf[SIZE]}) is shared between a fast producer and a slow consumer (\texttt{usleep(300000)} per item). Three primitives coordinate access: \texttt{empty} counts free slots (starts at~\texttt{4}), \texttt{full} counts filled slots (starts at~\texttt{0}), and \texttt{lock} protects \texttt{buf}, \texttt{in}, \texttt{out}, and \texttt{count}:
+
+\begin{lstlisting}[language=C]
+/* prodcons.c - producer and consumer around a buffer of 4 slots.
+ *   empty = free slots (starts at SIZE), full = filled slots (starts at 0), lock = the buffer itself.
+ * Build: gcc -Wall -pthread -o prodcons prodcons.c
+ */
+#include <stdio.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <semaphore.h>
+
+#define SIZE  4
+#define ITEMS 8
+
+int buf[SIZE];
+int in = 0, out = 0, count = 0;       /* count only for printing */
+
+sem_t empty, full;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+void *producer(void *arg) {
+    for (int item = 1; item <= ITEMS; item++) {
+        sem_wait(&empty);             /* wait for a free slot */
+        pthread_mutex_lock(&lock);
+        buf[in] = item;
+        in = (in + 1) % SIZE;
+        count++;
+        printf("put  %d  (in buffer: %d)\n", item, count);
+        pthread_mutex_unlock(&lock);
+        sem_post(&full);              /* one more filled slot */
+    }
+    return NULL;
+}
+
+void *consumer(void *arg) {
+    for (int k = 0; k < ITEMS; k++) {
+        sem_wait(&full);              /* wait for something to take */
+        pthread_mutex_lock(&lock);
+        int item = buf[out];
+        out = (out + 1) % SIZE;
+        count--;
+        printf("          take %d  (in buffer: %d)\n", item, count);
+        pthread_mutex_unlock(&lock);
+        sem_post(&empty);             /* one more free slot */
+        usleep(300000);               /* the consumer is slow */
+    }
+    return NULL;
+}
+
+int main(void) {
+    sem_init(&empty, 0, SIZE);
+    sem_init(&full, 0, 0);
+    pthread_t p, c;
+    pthread_create(&c, NULL, consumer, NULL);
+    pthread_create(&p, NULL, producer, NULL);
+    pthread_join(p, NULL);
+    pthread_join(c, NULL);
+    sem_destroy(&empty);
+    sem_destroy(&full);
+    return 0;
+}
+\end{lstlisting}
+
+Compiling and running \texttt{./prodcons} produces:
+
+\begin{lstlisting}
+$ gcc -Wall -pthread -o prodcons prodcons.c
+$ ./prodcons
+put  1  (in buffer: 1)
+put  2  (in buffer: 2)
+put  3  (in buffer: 3)
+put  4  (in buffer: 4)
+          take 1  (in buffer: 3)
+put  5  (in buffer: 4)
+          take 2  (in buffer: 3)
+put  6  (in buffer: 4)
+          take 3  (in buffer: 3)
+put  7  (in buffer: 4)
+          take 4  (in buffer: 3)
+put  8  (in buffer: 4)
+          take 5  (in buffer: 3)
+          take 6  (in buffer: 2)
+          take 7  (in buffer: 1)
+          take 8  (in buffer: 0)
+\end{lstlisting}
+
+\section{Observations for Part 1}
+
+\begin{enumerate}
+\tightlist
+\item \textbf{The producer is fast, yet \texttt{"in buffer"} never goes above 4. Which call stops it?}
+The call \texttt{sem\_wait(\&empty);} at the beginning of each loop iteration in \texttt{producer()} stops it. Because \texttt{empty} is initialized to \texttt{SIZE} (\texttt{4}), once the producer has placed 4 items into the buffer without the consumer removing any, \texttt{empty} has been decremented 4 times to~\texttt{0}. On the 5th item, \texttt{sem\_wait(\&empty)} blocks the producer until the consumer removes an item and calls \texttt{sem\_post(\&empty)}.
+
+\item \textbf{Who waits at the start: the consumer or the producer? Which call makes it wait?}
+At the start, the \textbf{consumer} waits (it is created first via \texttt{pthread\_create(\&c, ...)} when the buffer is still empty). The call \texttt{sem\_wait(\&full);} makes it wait because \texttt{full} starts at~\texttt{0} (\texttt{sem\_init(\&full, 0, 0)}), blocking the consumer until the producer inserts the first item and calls \texttt{sem\_post(\&full)}.
+
+\item \textbf{In \texttt{producer()}, swap the first two lines: lock the mutex BEFORE \texttt{sem\_wait(\&empty)}. Run it. What happens when the buffer is full, and why?}
+Swapping \texttt{pthread\_mutex\_lock(\&lock);} before \texttt{sem\_wait(\&empty);} in \texttt{producer()} and running under \texttt{timeout 2}:
+\begin{lstlisting}
+put  1  (in buffer: 1)
+put  2  (in buffer: 2)
+put  3  (in buffer: 3)
+          take 1  (in buffer: 2)
+put  4  (in buffer: 3)
+put  5  (in buffer: 4)
+exit code: 124
+\end{lstlisting}
+As soon as \texttt{in buffer} reaches~\texttt{4} (the buffer is full and \texttt{empty == 0}), \textbf{the program deadlocks (hangs forever)}:
+\begin{itemize}
+\tightlist
+\item On the next iteration, \texttt{producer()} locks \texttt{lock} first and then calls \texttt{sem\_wait(\&empty)}. Because \texttt{empty} is~\texttt{0}, the producer goes to sleep inside \texttt{sem\_wait(\&empty)} \textbf{while still holding \texttt{lock}}.
+\item When \texttt{consumer()} wakes from \texttt{usleep(300000)} to take the next item, it passes \texttt{sem\_wait(\&full)} and then calls \texttt{pthread\_mutex\_lock(\&lock)}. Because the sleeping producer holds \texttt{lock}, the consumer blocks on \texttt{lock} and can never reach \texttt{sem\_post(\&empty)}.
+\end{itemize}
+Each thread waits for what the other holds: the producer holds \texttt{lock} and waits for \texttt{empty}, while the consumer holds the ability to post \texttt{empty} and waits for \texttt{lock}.
+\end{enumerate}
+
+\chapter{Part 2: The condition variable}
+
+\section{Source code and execution of \texttt{condvar.c}}
+
+\texttt{condvar.c} solves the writer-before-reader ordering problem using an explicit integer condition \texttt{ready}, protected by \texttt{lock}, and a condition variable \texttt{changed}:
+
+\begin{lstlisting}[language=C]
+/* condvar.c - the order.c problem, solved with a mutex and a condition variable.
+ * Build: gcc -Wall -pthread -o condvar condvar.c
+ */
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <pthread.h>
+
+char message[32];
+int ready = 0;                        /* the condition itself */
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t changed = PTHREAD_COND_INITIALIZER;
+
+void *writer(void *arg) {
+    sleep(1);
+    pthread_mutex_lock(&lock);
+    strcpy(message, "hello");
+    ready = 1;
+    printf("A: message written\n");
+    pthread_cond_signal(&changed);    /* wake one waiter */
+    pthread_mutex_unlock(&lock);
+    return NULL;
+}
+
+void *reader(void *arg) {
+    pthread_mutex_lock(&lock);
+    while (!ready) {                  /* while, not if: re-check after waking */
+        printf("B: not ready, I sleep\n");
+        pthread_cond_wait(&changed, &lock);   /* unlocks, sleeps, locks again */
+    }
+    printf("B: I read \"%s\"\n", message);
+    pthread_mutex_unlock(&lock);
+    return NULL;
+}
+
+int main(void) {
+    pthread_t a, b;
+    pthread_create(&b, NULL, reader, NULL);
+    pthread_create(&a, NULL, writer, NULL);
+    pthread_join(a, NULL);
+    pthread_join(b, NULL);
+    return 0;
+}
+\end{lstlisting}
+
+Compiling and running \texttt{./condvar}:
+
+\begin{lstlisting}
+$ gcc -Wall -pthread -o condvar condvar.c
+$ ./condvar
+B: not ready, I sleep
+A: message written
+B: I read "hello"
+\end{lstlisting}
+
+\section{Observations for Part 2}
+
+\begin{enumerate}
+\tightlist
+\item \textbf{In \texttt{order.c} (Lab 11) the semaphore itself remembered that the message was ready. Here, which variable remembers it?}
+The normal integer variable \textbf{\texttt{ready}} (\texttt{int ready = 0;}, set to \texttt{1} by \texttt{writer()} while holding \texttt{lock}) remembers that the message has been written. Unlike a semaphore, a condition variable (\texttt{changed}) has no internal counter: if \texttt{pthread\_cond\_signal} is called before \texttt{reader()} sleeps, the signal is lost, but \texttt{reader()} sees \texttt{ready == 1} under \texttt{lock} and skips \texttt{pthread\_cond\_wait} altogether.
+
+\item \textbf{Replace \texttt{"while (!ready)"} with \texttt{"if (!ready)"}, compile, run. Does it still work here?}
+Running the modified version with \texttt{if (!ready)} outputs:
+\begin{lstlisting}
+B: not ready, I sleep
+A: message written
+B: I read "hello"
+\end{lstlisting}
+\textbf{Yes}, it still works in this small two-thread program because there is only one waiting reader thread, \texttt{writer()} sets \texttt{ready = 1} before calling \texttt{pthread\_cond\_signal(\&changed)}, and no spurious wakeup occurred during the 1-second wait.
+
+\item \textbf{Then why do we write \texttt{while}? Give one reason why a thread can wake up and still find \texttt{ready == 0}.}
+We write \texttt{while (!ready)} because a thread returning from \texttt{pthread\_cond\_wait} is not guaranteed that the condition holds:
+\begin{itemize}
+\tightlist
+\item \emph{Spurious wakeups:} POSIX and the Linux kernel (\texttt{futex}) allow \texttt{pthread\_cond\_wait} to wake up occasionally even when no thread signaled the condition variable (e.g., when a signal is delivered or due to kernel wait-queue implementation details).
+\item \emph{Multiple waiters / intercepted state:} If two consumers/readers are waiting (or another thread locks \texttt{lock} before the woken thread re-acquires \texttt{lock}), the first thread to run may consume the work and reset \texttt{ready = 0} before the second woken thread acquires \texttt{lock}. Re-testing in a \texttt{while} loop ensures the thread goes back to sleep if \texttt{ready == 0}.
+\end{itemize}
+\end{enumerate}
+
+\chapter{Part 3: Readers and writers}
+
+\section{Source code and execution of \texttt{readers.c}}
+
+\texttt{readers.c} allows any number of readers into the room simultaneously while ensuring that a writer enters only when the room is completely empty:
+
+\begin{lstlisting}[language=C]
+/* readers.c - readers and writers with two semaphores.
+ *   Many readers may read together; a writer must be alone.
+ * Build: gcc -Wall -pthread -o readers readers.c
+ */
+#include <stdio.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <semaphore.h>
+
+#define READERS 3
+#define WRITERS 2
+
+int value = 0;                        /* the shared data */
+int readers = 0;                      /* how many are reading now */
+sem_t rlock;                          /* protects the counter readers */
+sem_t room;                           /* 1 = the room is free for a writer */
+
+void *reader(void *arg) {
+    long id = (long)arg;
+    sem_wait(&rlock);
+    if (++readers == 1)               /* the first reader in locks out the writers */
+        sem_wait(&room);
+    sem_post(&rlock);
+
+    printf("reader %ld reads %d  (readers inside: %d)\n", id, value, readers);
+    usleep(200000);
+
+    sem_wait(&rlock);
+    if (--readers == 0)               /* the last reader out lets the writers in */
+        sem_post(&room);
+    sem_post(&rlock);
+    return NULL;
+}
+
+void *writer(void *arg) {
+    long id = (long)arg;
+    sem_wait(&room);                  /* alone in the room */
+    value += 10;
+    printf("writer %ld writes %d (alone)\n", id, value);
+    usleep(200000);
+    sem_post(&room);
+    return NULL;
+}
+
+int main(void) {
+    sem_init(&rlock, 0, 1);
+    sem_init(&room, 0, 1);
+    pthread_t r[READERS], w[WRITERS];
+    pthread_create(&w[0], NULL, writer, (void *)1L);
+    for (long i = 0; i < READERS; i++)
+        pthread_create(&r[i], NULL, reader, (void *)(i + 1));
+    pthread_create(&w[1], NULL, writer, (void *)2L);
+    for (int i = 0; i < READERS; i++) pthread_join(r[i], NULL);
+    for (int i = 0; i < WRITERS; i++) pthread_join(w[i], NULL);
+    return 0;
+}
+\end{lstlisting}
+
+Compiling and running \texttt{./readers}:
+
+\begin{lstlisting}
+$ gcc -Wall -pthread -o readers readers.c
+$ ./readers
+writer 1 writes 10 (alone)
+reader 1 reads 10  (readers inside: 1)
+reader 2 reads 10  (readers inside: 2)
+reader 3 reads 10  (readers inside: 3)
+writer 2 writes 20 (alone)
+\end{lstlisting}
+
+\section{Observations for Part 3}
+
+\begin{enumerate}
+\tightlist
+\item \textbf{Three readers are inside at the same time, but a writer is always alone. Which two lines of \texttt{reader()} make that possible?}
+The two lines:
+\begin{lstlisting}[language=C]
+    if (++readers == 1)               /* the first reader in locks out the writers */
+        sem_wait(&room);
+\end{lstlisting}
+(together with the matching exit check \texttt{if (--readers == 0) sem\_post(\&room);}). Only the \textbf{first} arriving reader (\texttt{++readers == 1}) calls \texttt{sem\_wait(\&room)} to lock out writers; the 2nd and 3rd readers see \texttt{++readers == 2} and \texttt{3}, skip \texttt{sem\_wait(\&room)}, and read concurrently while the first reader holds \texttt{room} locked until the last reader (\texttt{--readers == 0}) unlocks it.
+
+\item \textbf{Why does the counter \texttt{readers} need its own lock (\texttt{rlock})? What could go wrong without it?}
+Because multiple reader threads concurrently increment (\texttt{++readers}), decrement (\texttt{--readers}), and branch on \texttt{readers}, leaving it unprotected causes a data race:
+\begin{itemize}
+\tightlist
+\item Two readers arriving together could both read \texttt{readers == 0} and both evaluate \texttt{++readers == 1} (or lose an increment so \texttt{readers} is~\texttt{1} when two readers are inside). If both call \texttt{sem\_wait(\&room)}, the second reader blocks instead of reading concurrently; if an increment is lost, the first reader to leave decrements \texttt{readers} to~\texttt{0} and calls \texttt{sem\_post(\&room)}, allowing a writer into the room \textbf{while another reader is still reading}.
+\item Similarly, a lost decrement on exit would prevent \texttt{readers} from ever reaching~\texttt{0}, so \texttt{sem\_post(\&room)} would never be called and writers would block forever.
+\end{itemize}
+
+\item \textbf{Imagine readers that keep arriving without a pause. What happens to \texttt{writer 2}? (This problem has a name: starvation.)}
+If new readers keep arriving before existing readers finish, there is always at least one reader in the room, so \texttt{readers} never drops back to~\texttt{0}. Because \texttt{sem\_post(\&room)} is only executed when \texttt{--readers == 0}, \texttt{room} remains locked indefinitely and \texttt{writer 2} waits forever in \texttt{sem\_wait(\&room)}—a classic \textbf{writer starvation} caused by reader preference.
+\end{enumerate}
+
+\chapter{Part 4: Build a deadlock, then remove it}
+
+\section{Reproducing and fixing the deadlock (\texttt{deadlock.c})}
+
+In the original version of \texttt{deadlock.c}, thread \texttt{one} locks \texttt{A} then \texttt{B}, whereas thread \texttt{two} locks \texttt{B} then \texttt{A}. Running it under \texttt{timeout 5}:
+
+\begin{lstlisting}
+$ gcc -Wall -pthread -o deadlock deadlock.c
+$ timeout 5 ./deadlock; echo "exit code: $?"
+one: I have A, I want B
+two: I have B, I want A
+exit code: 124
+\end{lstlisting}
+
+Exit code \texttt{124} means \texttt{timeout} had to kill \texttt{./deadlock} after 5 seconds because neither thread could ever proceed.
+
+Fixing \texttt{two()} so that it locks \texttt{A} first and then \texttt{B} (the same order as \texttt{one()}) yields the submitted \texttt{deadlock.c}:
+
+\begin{lstlisting}[language=C]
+/* deadlock.c - two threads, two mutexes, fixed by locking in the same order.
+ * Build: gcc -Wall -pthread -o deadlock deadlock.c
+ * Run:   timeout 5 ./deadlock; echo "exit code: $?"
+ */
+#include <stdio.h>
+#include <unistd.h>
+#include <pthread.h>
+
+pthread_mutex_t A = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t B = PTHREAD_MUTEX_INITIALIZER;
+
+void *one(void *arg) {
+    pthread_mutex_lock(&A);
+    printf("one: I have A, I want B\n");
+    sleep(1);
+    pthread_mutex_lock(&B);           /* waits for two */
+    printf("one: I have both\n");
+    pthread_mutex_unlock(&B);
+    pthread_mutex_unlock(&A);
+    return NULL;
+}
+
+void *two(void *arg) {
+    pthread_mutex_lock(&A);           /* the fix: lock A first here too */
+    printf("two: I have B, I want A\n");
+    sleep(1);
+    pthread_mutex_lock(&B);           /* waits for one */
+    printf("two: I have both\n");
+    pthread_mutex_unlock(&B);
+    pthread_mutex_unlock(&A);
+    return NULL;
+}
+
+int main(void) {
+    pthread_t t1, t2;
+    pthread_create(&t1, NULL, one, NULL);
+    pthread_create(&t2, NULL, two, NULL);
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+    printf("done\n");
+    return 0;
+}
+\end{lstlisting}
+
+Compiling and running the fixed \texttt{deadlock.c}:
+
+\begin{lstlisting}
+$ gcc -Wall -pthread -o deadlock deadlock.c
+$ timeout 5 ./deadlock; echo "exit code: $?"
+one: I have A, I want B
+one: I have both
+two: I have B, I want A
+two: I have both
+done
+exit code: 0
+\end{lstlisting}
+
+\section{Observations for Part 4}
+
+\begin{enumerate}
+\tightlist
+\item \textbf{In the stuck run, which thread holds which mutex, and which one is each thread waiting for? Draw the circle.}
+\begin{itemize}
+\tightlist
+\item Thread \texttt{one} \textbf{holds mutex \texttt{A}} and is \textbf{waiting for mutex \texttt{B}} (\texttt{pthread\_mutex\_lock(\&B)}).
+\item Thread \texttt{two} \textbf{holds mutex \texttt{B}} and is \textbf{waiting for mutex \texttt{A}} (\texttt{pthread\_mutex\_lock(\&A)}).
+\end{itemize}
+The circular wait graph is:
+\begin{lstlisting}
+     holds                  wants
+[A] -------> (Thread one) --------> [B]
+ ^                                   |
+ |   wants                  holds    v
+ +---------- (Thread two) <----------+
+\end{lstlisting}
+
+\item \textbf{Remove both \texttt{sleep(1)} lines from the ORIGINAL version and run it ten times. Does it still always hang? Why is that worse, not better?}
+Running the original opposite-order program without \texttt{sleep(1)} ten times produced \textbf{9 hangs (\texttt{exit code: 124}) and 1 completion (\texttt{exit code: 0} on run~10)}:
+\begin{lstlisting}
+=== run 9 ===
+one: I have A, I want B
+two: I have B, I want A
+exit code: 124
+=== run 10 ===
+one: I have A, I want B
+one: I have both
+two: I have B, I want A
+two: I have both
+done
+exit code: 0
+\end{lstlisting}
+\textbf{No, it does not always hang:} without \texttt{sleep(1)}, thread \texttt{one} sometimes finishes acquiring \texttt{A}, acquiring \texttt{B}, and unlocking both before the OS has even finished starting thread \texttt{two}. \textbf{Why this is worse, not better:} the deadlock bug is still present in the code, but now it is timing-dependent (a ``Heisenbug'') that can slip past testing and then freeze unpredictably in production whenever both threads happen to overlap.
+
+\item \textbf{In one sentence: why can taking the locks in the same order never deadlock?}
+Acquiring locks in a single global order (\texttt{A} before \texttt{B}) makes a circular wait impossible: any thread waiting for \texttt{B} already holds \texttt{A}, so whichever thread holds \texttt{B} cannot be waiting for \texttt{A} and is guaranteed to finish and release \texttt{B}.
+\end{enumerate}
+
+\utmconclusions
+
+This laboratory combined semaphores, mutexes, and condition variables to solve standard synchronization problems and analyze deadlock:
+\begin{itemize}
+\tightlist
+\item In \textbf{Part~1}, two counting semaphores (\texttt{empty}, \texttt{full}) and a mutex coordinated a bounded-buffer producer and consumer (\texttt{prodcons.c}), and swapping the mutex lock before \texttt{sem\_wait(\&empty)} proved that a thread must never sleep on a semaphore while holding a mutex needed by the waking thread.
+\item In \textbf{Part~2}, \texttt{condvar.c} separated the boolean state (\texttt{ready}, protected by \texttt{lock}) from the sleep queue (\texttt{changed}), demonstrating why \texttt{pthread\_cond\_wait} always requires a \texttt{while (!ready)} loop.
+\item In \textbf{Part~3}, \texttt{readers.c} used \texttt{rlock} and \texttt{room} so the first reader locks out writers and the last reader lets them back in, allowing concurrent readers while illustrating reader-preference writer starvation.
+\item In \textbf{Part~4}, \texttt{deadlock.c} demonstrated how acquiring two mutexes in opposite order creates a circular wait and how enforcing a strict global lock order (\texttt{A} then \texttt{B}) eliminates deadlock permanently.
+\end{itemize}
+\end{document}

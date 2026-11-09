@@ -1,0 +1,3 @@
+B: waiting for the message...
+A: message written
+B: I read "hello"

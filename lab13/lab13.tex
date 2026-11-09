@@ -1,0 +1,365 @@
+\documentclass{../latex/utmreport}
+\newcommand{\ReportTitle}{Lab 13: Semaphores in Your Own Kernel}
+\input{../latex/report-common.tex}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\begin{document}
+\makeutmreporttitlepage
+\tableofcontents
+\clearpage
+\begin{utmabstract}[Abstract]
+The goal of this laboratory is to implement counting semaphores directly inside the xv6 RISC-V operating system kernel as three new system calls—\texttt{sem\_init} (24), \texttt{sem\_down} (25), and \texttt{sem\_up} (26)—together with the optional non-blocking \texttt{sem\_trydown} (27). In Part~1, the system call numbers, user-space prototypes, \texttt{usys.pl} trap stubs, and two test utilities (\texttt{user/semtest.c} and \texttt{user/mix.c}) are wired into the build and verified to reach the kernel trap handler (\texttt{unknown sys call 24}). In Part~2, \texttt{kernel/sem.c} implements a shared table of eight semaphores (\texttt{sems[NSEM]}), each consisting of an integer counter protected by a spinlock and synchronized via xv6's two-step sleep mechanism (\texttt{sleep\_prepare(s)}, \texttt{release(\&s->lock)}, \texttt{sleep()}) and \texttt{wakeup(s)}, passing both the parent-before-child ordering test and the three-round ping-pong test in \texttt{semtest}. In Part~3, running \texttt{mix} without and with semaphore~3 as a binary lock demonstrates character-level interleaving across 31 \texttt{write()} system calls per line on a 3-CPU RISC-V machine versus atomic whole-line output under \texttt{mix lock}.
+\utmkeywords{xv6, RISC-V, kernel semaphores, system calls, spinlock, sleep\_prepare, sleep, wakeup, critical section}
+\end{utmabstract}
+\utmintroduction
+
+\section*{Goal of the laboratory (Scopul lucrării)}
+
+Whereas Labs~11 and~12 used POSIX semaphores from the C library on Linux from the outside, the purpose of this laboratory work is to build counting semaphores inside the xv6 RISC-V kernel itself as new system calls (\texttt{sem\_init}, \texttt{sem\_down}, \texttt{sem\_up}, plus optional \texttt{sem\_trydown}). Specifically, the scope and objectives of the laboratory are:
+\begin{enumerate}
+\tightlist
+\item \textbf{Part 1 (The numbers and the user side):} Assign system call numbers \texttt{24} (\texttt{SYS\_sem\_init}), \texttt{25} (\texttt{SYS\_sem\_down}), and \texttt{26} (\texttt{SYS\_sem\_up}) in \texttt{kernel/syscall.h}, declare their prototypes in \texttt{user/user.h}, add their \texttt{ecall} stubs in \texttt{user/usys.pl}, create \texttt{user/semtest.c} and \texttt{user/mix.c}, add them to \texttt{UPROGS} in \texttt{Makefile}, and verify Check~1 (\texttt{unknown sys call 24} and \texttt{25}, with the child printing before the parent).
+\item \textbf{Part 2 (The kernel side):} Implement \texttt{kernel/sem.c} with a table of \texttt{NSEM = 8} kernel semaphores (\texttt{struct sem \{ struct spinlock lock; int value; \}}) and handlers \texttt{sys\_sem\_init}, \texttt{sys\_sem\_down}, and \texttt{sys\_sem\_up} using \texttt{sleep\_prepare(s)} and \texttt{sleep()} / \texttt{wakeup(s)}, link \texttt{\$K/sem.o} in \texttt{Makefile}, register the handlers in \texttt{kernel/syscall.c}, and pass Check~2 (\texttt{semtest: OK}).
+\item \textbf{Part 3 (A semaphore as a lock: \texttt{mix}):} Run \texttt{mix} without a lock and with semaphore~3 as a lock (\texttt{mix lock}) across 3 virtual CPUs, and explain why characters interleave without the lock, which lines form the critical section, why \texttt{sem\_down} tests \texttt{s->value == 0} in a \texttt{while} loop, and why \texttt{s->lock} must be released before \texttt{sleep()}.
+\item \textbf{Optional (\texttt{sem\_trydown}):} Add system call~\texttt{27} (\texttt{SYS\_sem\_trydown}), which decrements the semaphore if positive or returns \texttt{-1} immediately when the value is~\texttt{0}, and verify it with \texttt{user/trydowntest.c}.
+\end{enumerate}
+
+All kernel and user changes were built and tested in \texttt{/home/victor/xv6-riscv} on QEMU (\texttt{-smp 3}). The complete patch is provided in \texttt{xv6-sem.patch} and answers are recorded in \texttt{notes.txt}.
+
+\chapter{Part 1: The numbers and the user side}
+
+\section{System call numbers, prototypes, stubs, and test programs}
+
+Six user-side and header additions expose the semaphore calls to user programs:
+
+\begin{enumerate}
+\tightlist
+\item \textbf{\texttt{kernel/syscall.h}:} Assign numbers \texttt{24}, \texttt{25}, \texttt{26} (and \texttt{27} for the optional \texttt{sem\_trydown}) after \texttt{SYS\_sync} (\texttt{22}) and \texttt{SYS\_trace} (\texttt{23}):
+\begin{lstlisting}[language=C]
+#define SYS_sync        22
+#define SYS_trace       23
+#define SYS_sem_init    24
+#define SYS_sem_down    25
+#define SYS_sem_up      26
+#define SYS_sem_trydown 27
+\end{lstlisting}
+
+\item \textbf{\texttt{user/user.h}:} Declare the user-space system call prototypes:
+\begin{lstlisting}[language=C]
+int sync(void);
+int trace(int);
+int sem_init(int, int); // new: id, start value
+int sem_down(int);      // new: take one, or sleep
+int sem_up(int);        // new: give one back
+int sem_trydown(int);   // optional: take one, or return -1 at once
+\end{lstlisting}
+
+\item \textbf{\texttt{user/usys.pl}:} Add stub entries so \texttt{usys.pl} generates the RISC-V \texttt{li a7, SYS\_sem\_*; ecall; ret} assembly routines in \texttt{user/usys.S}:
+\begin{lstlisting}
+entry("sync");
+entry("trace");
+entry("sem_init");
+entry("sem_down");
+entry("sem_up");
+entry("sem_trydown");
+\end{lstlisting}
+
+\item \textbf{\texttt{user/semtest.c}:} Test~1 checks parent-before-child ordering using semaphore~0 initialized to~\texttt{0} (while the parent pauses for 10 ticks), and Test~2 runs a 3-round ping-pong alternation using semaphore~1 (started at~\texttt{1}) and semaphore~2 (started at~\texttt{0}):
+\begin{lstlisting}[language=C]
+// semtest.c: two tests for the kernel semaphores (Lab 12).
+#include "kernel/types.h"
+#include "user/user.h"
+
+int
+main(void)
+{
+  // Test 1: order. Semaphore 0 starts at 0, so the child must wait.
+  sem_init(0, 0);
+  if (fork() == 0) {
+    sem_down(0);
+    printf("child: I ran after the parent\n");
+    exit(0);
+  }
+  pause(10);
+  printf("parent: done, I let the child go\n");
+  sem_up(0);
+  wait(0);
+
+  // Test 2: ping-pong. Semaphore 1 = ping's turn, semaphore 2 = pong's turn.
+  sem_init(1, 1);
+  sem_init(2, 0);
+  if (fork() == 0) {
+    for (int i = 1; i <= 3; i++) {
+      sem_down(2);
+      printf("  pong %d\n", i);
+      sem_up(1);
+    }
+    exit(0);
+  }
+  for (int i = 1; i <= 3; i++) {
+    sem_down(1);
+    printf("ping %d\n", i);
+    sem_up(2);
+  }
+  wait(0);
+  printf("semtest: OK\n");
+  exit(0);
+}
+\end{lstlisting}
+
+\item \textbf{\texttt{user/mix.c}:} Two processes each print five 30-letter lines (\texttt{A}s in the parent, \texttt{b}s in the child), issuing one \texttt{write(1, p, 1)} system call per character, optionally guarded by semaphore~3:
+\begin{lstlisting}[language=C]
+// mix.c: two processes print five lines each, one letter per write().
+//   mix        no lock: the letters of the two processes can mix
+//   mix lock   semaphore 3 used as a lock: every line stays whole
+#include "kernel/types.h"
+#include "user/user.h"
+
+void
+lines(char *s, int uselock)
+{
+  for (int k = 0; k < 5; k++) {
+    if (uselock)
+      sem_down(3);
+    for (char *p = s; *p; p++)
+      write(1, p, 1);
+    if (uselock)
+      sem_up(3);
+  }
+}
+
+int
+main(int argc, char *argv[])
+{
+  int uselock = (argc > 1);
+  sem_init(3, 1);
+  if (fork() == 0) {
+    lines("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n", uselock);
+    exit(0);
+  }
+  lines("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n", uselock);
+  wait(0);
+  exit(0);
+}
+\end{lstlisting}
+
+\item \textbf{\texttt{Makefile}:} Add \texttt{\$U/\_semtest\textbackslash}, \texttt{\$U/\_mix\textbackslash}, and \texttt{\$U/\_trydowntest\textbackslash} after \texttt{\$U/\_zombie\textbackslash} in \texttt{UPROGS}.
+\end{enumerate}
+
+\section{Check 1: The calls reach the kernel}
+
+Running \texttt{semtest} before adding the kernel side produces:
+
+\begin{lstlisting}
+$ semtest
+3 semtest: unknown sys call 24
+4 semtest: unknown sys call 25
+child: I ran after the parent
+parent: done, I let the child go
+\end{lstlisting}
+
+Without kernel semaphores, \texttt{sem\_init(0, 0)} (syscall~24) and \texttt{sem\_down(0)} (syscall~25) fail immediately with \texttt{-1}, so the child does not sleep during the parent's \texttt{pause(10)} and prints \texttt{child: I ran after the parent} \emph{before} the parent prints \texttt{parent: done, I let the child go}.
+
+\chapter{Part 2: The kernel side}
+
+\section{Implementation of \texttt{kernel/sem.c} and syscall dispatch}
+
+The file \texttt{kernel/sem.c} defines a static table of \texttt{NSEM = 8} semaphores shared across all processes. Each entry pairs a spinlock (\texttt{lock}) with an integer counter (\texttt{value}). In our xv6 tree, sleeping uses the two-step sequence \texttt{sleep\_prepare(s)}, \texttt{release(\&s->lock)}, \texttt{sleep()}:
+
+\begin{lstlisting}[language=C]
+// sem.c: counting semaphores inside the xv6 kernel (Lab 12).
+// A small table of NSEM semaphores, shared by every process.
+// Each one is a number plus a spinlock that protects the number.
+
+#include "types.h"
+#include "riscv.h"
+#include "defs.h"
+#include "param.h"
+#include "spinlock.h"
+#include "proc.h"
+
+#define NSEM 8
+
+struct sem {
+  struct spinlock lock;   // a zeroed spinlock is a free spinlock
+  int value;              // how many may still pass
+};
+
+static struct sem sems[NSEM];
+
+// sem_init(id, value): give semaphore id its start value.
+uint64
+sys_sem_init(void)
+{
+  int id, value;
+  argint(0, &id);
+  argint(1, &value);
+  if (id < 0 || id >= NSEM || value < 0)
+    return -1;
+  acquire(&sems[id].lock);
+  sems[id].value = value;
+  release(&sems[id].lock);
+  return 0;
+}
+
+// sem_down(id): take one unit; if there is none, sleep until there is.
+uint64
+sys_sem_down(void)
+{
+  int id;
+  argint(0, &id);
+  if (id < 0 || id >= NSEM)
+    return -1;
+  struct sem *s = &sems[id];
+
+  acquire(&s->lock);
+  while (s->value == 0) {
+    sleep_prepare(s);     // I will sleep on the address of s
+    release(&s->lock);    // never sleep holding a spinlock
+    sleep();              // returns at once if sem_up came in between
+    acquire(&s->lock);
+    if (killed(myproc())) { // kill must still work on a waiting process
+      release(&s->lock);
+      return -1;
+    }
+  }
+  s->value--;
+  release(&s->lock);
+  return 0;
+}
+
+// sem_up(id): give one unit back and wake whoever sleeps on s.
+uint64
+sys_sem_up(void)
+{
+  int id;
+  argint(0, &id);
+  if (id < 0 || id >= NSEM)
+    return -1;
+  struct sem *s = &sems[id];
+
+  acquire(&s->lock);
+  s->value++;
+  wakeup(s);
+  release(&s->lock);
+  return 0;
+}
+
+// sem_trydown(id): take one unit if available, or return -1 at once.
+uint64
+sys_sem_trydown(void)
+{
+  int id;
+  argint(0, &id);
+  if (id < 0 || id >= NSEM)
+    return -1;
+  struct sem *s = &sems[id];
+
+  acquire(&s->lock);
+  if (s->value == 0) {
+    release(&s->lock);
+    return -1;
+  }
+  s->value--;
+  release(&s->lock);
+  return 0;
+}
+\end{lstlisting}
+
+In \texttt{Makefile}, \texttt{\$K/sem.o \textbackslash} is added after \texttt{\$K/sysproc.o \textbackslash} in \texttt{OBJS}. In \texttt{kernel/syscall.c}, \texttt{sys\_sem\_init}, \texttt{sys\_sem\_down}, \texttt{sys\_sem\_up}, and \texttt{sys\_sem\_trydown} are declared \texttt{extern} and added to \texttt{syscalls[]} (and \texttt{syscallnames[]}).
+
+\section{Check 2: \texttt{semtest}}
+
+Booting xv6 with \texttt{make qemu} and running \texttt{semtest}:
+
+\begin{lstlisting}
+$ semtest
+parent: done, I let the child go
+child: I ran after the parent
+ping 1
+  pong 1
+ping 2
+  pong 2
+ping 3
+  pong 3
+semtest: OK
+\end{lstlisting}
+
+Even though the parent pauses for 10 ticks before printing, the child blocks in \texttt{sem\_down(0)} and prints second, after the parent calls \texttt{sem\_up(0)}. Then \texttt{ping} and \texttt{pong} alternate strictly for three rounds before printing \texttt{semtest: OK}.
+
+\chapter{Part 3: A semaphore as a lock: \texttt{mix}}
+
+\section{Running \texttt{mix} without and with a lock}
+
+Running \texttt{mix} twice without arguments (no lock) in QEMU (\texttt{-smp 3}):
+
+\begin{lstlisting}
+$ mix
+AAAbAbbbbbbbbbbAbAbAbAbAbAbAbAbAbAAbAbAbbbbbbAAbAb
+AbbAbAbAbAbAbAbAbAbAb
+bAbAbAbAbAbAbAAbAbAbAbAAAAAAbbbbbbbb
+bbbAbAbbbAAAAAAbbAbbAAbbbbbbbAbAb
+bbbbbbbbbbA
+AbAbAAbAAbAbAAbAbbAbAAAbAAbbbAbAbAbAbAbAbAbAbAbAbAbAbAb
+bAbAbAbA
+AbAbAbAbbbbbbbbbbbbbAbAbAbAbAbAbAbAAbAAAbAbAbAbAbAbA
+AAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+\end{lstlisting}
+
+Running \texttt{mix lock} (using semaphore~3, initialized to~\texttt{1}, as a binary lock around each line):
+
+\begin{lstlisting}
+$ mix lock
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+\end{lstlisting}
+
+Testing the optional non-blocking \texttt{sem\_trydown} (system call~27) with \texttt{trydowntest}:
+
+\begin{lstlisting}
+$ trydowntest
+first sem_trydown(4): 0 (expected 0)
+second sem_trydown(4): -1 (expected -1)
+after sem_up, sem_trydown(4): 0 (expected 0)
+\end{lstlisting}
+
+\section{Observations for Part 3}
+
+\begin{enumerate}
+\tightlist
+\item \textbf{Without the lock, why do the letters mix? (How many system calls does one line cost?)}
+Each line of \texttt{mix} contains 30 letters plus 1 newline character (\texttt{'\textbackslash n'}), and the inner loop \texttt{for (char *p = s; *p; p++) write(1, p, 1);} invokes a separate \texttt{write()} system call for every single character—so \textbf{one line costs 31 \texttt{write()} system calls}. Because QEMU boots xv6 with 3 virtual CPUs (\texttt{-smp 3}), the parent and child processes run truly in parallel on separate CPU cores (and can also be preempted by timer interrupts between calls). While the console driver serializes each individual 1-byte \texttt{write()}, nothing keeps the 31 \texttt{write()} calls of a line together without a semaphore lock, so characters from both processes interleave.
+
+\item \textbf{With the lock every line is whole. Which two lines of \texttt{mix.c} make one line a critical section?}
+The call \texttt{sem\_down(3);} right before the character loop \texttt{for (char *p = s; *p; p++) write(1, p, 1);} and the call \texttt{sem\_up(3);} right after that loop (executed when \texttt{uselock} is true). Because semaphore~3 starts at~\texttt{1}, whichever process calls \texttt{sem\_down(3)} first decrements it to~\texttt{0} and prints all 31 characters of its line before calling \texttt{sem\_up(3)}, while the other process sleeps in \texttt{sem\_down(3)}.
+
+\item \textbf{In \texttt{sem\_down} the test is \texttt{"while (s->value == 0)"}, not \texttt{"if"}. Why can a process wake up and still find 0?}
+In \texttt{sys\_sem\_up()}, \texttt{wakeup(s)} wakes up \textbf{all} processes sleeping on channel \texttt{s} (broadcast semantics), and another running process on another CPU could also call \texttt{sem\_down} before a woken process runs. When \texttt{sem\_up} increments \texttt{s->value} from \texttt{0} to \texttt{1}, the first process to acquire \texttt{s->lock} exits the loop and decrements \texttt{s->value} back to~\texttt{0}. Any other woken process that acquires \texttt{s->lock} afterward finds \texttt{s->value == 0} again and must loop back to sleep via \texttt{while (s->value == 0)} rather than decrementing \texttt{s->value} into negative numbers.
+
+\item \textbf{\texttt{sem\_down} calls \texttt{release(\&s->lock)} BEFORE \texttt{sleep()}. What would go wrong if it slept holding the spinlock?}
+Two fatal problems would occur:
+\begin{itemize}
+\tightlist
+\item \emph{Deadlock:} If a waiting process went to sleep still holding \texttt{s->lock}, any process calling \texttt{sem\_up} would spin forever on \texttt{acquire(\&s->lock)} and could never increment \texttt{s->value} or call \texttt{wakeup(s)}, so the sleeper could never wake up.
+\item \emph{Kernel panic / disabled interrupts:} In xv6, \texttt{acquire()} disables interrupts on the CPU core, and \texttt{sched()} panics (\texttt{panic("sched locks")}) if a process attempts to context-switch while holding any spinlock other than its own \texttt{p->lock}.
+\end{itemize}
+\end{enumerate}
+
+\utmconclusions
+
+Implementing counting semaphores in the xv6 RISC-V kernel connected user-space synchronization semantics directly to their kernel implementation:
+\begin{itemize}
+\tightlist
+\item In \textbf{Part~1}, adding system calls \texttt{24}--\texttt{27} across \texttt{kernel/syscall.h}, \texttt{user/user.h}, and \texttt{user/usys.pl} demonstrated how user calls trap into the kernel and why \texttt{semtest} fails ordering before the kernel handlers exist.
+\item In \textbf{Part~2}, \texttt{kernel/sem.c} showed that a kernel semaphore is simply an integer counter, a spinlock protecting it, and two-step kernel sleep/wakeup (\texttt{sleep\_prepare(s)}, \texttt{release(\&s->lock)}, \texttt{sleep()} and \texttt{wakeup(s)}) so waiting processes consume zero CPU cycles.
+\item In \textbf{Part~3}, \texttt{mix} and \texttt{mix lock} demonstrated multi-core interleaving across 31 single-byte \texttt{write()} system calls per line and proved that wrapping the loop in \texttt{sem\_down(3)} / \texttt{sem\_up(3)} turns the entire 31-syscall line into an indivisible critical section.
+\end{itemize}
+\end{document}

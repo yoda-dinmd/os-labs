@@ -22,11 +22,14 @@ Laboratory submissions for **Operating Systems**, FCIM / FAF, Technical Universi
 | 8 | The Same Calls, Inside Your Own OS | [Lab 8 PDF](reports/lab8.pdf) | [Sources and observations](lab8/) · [LaTeX](lab8/lab8.tex) |
 | 9 | Watching System Calls with `strace` (Linux) | [Lab 9 PDF](reports/lab9.pdf) | [Submission overview](lab9/README.md) · [LaTeX](lab9/lab9.tex) |
 | 10 | Add Your Own System Call: `trace` (xv6 on RISC-V) | [Lab 10 PDF](reports/lab10.pdf) | [Submission overview and patch](lab10/README.md) · [LaTeX](lab10/lab10.tex) |
+| 11 | The Race and the Semaphore (Linux) | [Lab 11 PDF](reports/lab11.pdf) | [Submission overview](lab11/README.md) · [Notes](lab11/report.md) · [LaTeX](lab11/lab11.tex) |
+| 12 | Producer, Consumer and the Other Tools (Linux) | [Lab 12 PDF](reports/lab12.pdf) | [Submission overview](lab12/README.md) · [Notes](lab12/report.md) · [LaTeX](lab12/lab12.tex) |
+| 13 | Semaphores in Your Own Kernel (xv6 on RISC-V) | [Lab 13 PDF](reports/lab13.pdf) | [Submission overview and patch](lab13/README.md) · [Notes](lab13/notes.txt) · [LaTeX](lab13/lab13.tex) |
 
 ## Repository organization
 
 ```text
-reports/             Compiled PDF reports for Labs 1–10
+reports/             Compiled PDF reports for Labs 1–13
 metadata.tex         Shared student, course and instructor information
 build-reports.sh     PDF compilation script
 latex/               Shared UTM report class, formatting and logo
@@ -40,4 +43,7 @@ lab7/                Linux process, redirection and pipe programs
 lab8/                xv6 process and pipe programs
 lab9/                Linux strace experiments and direct syscall program
 lab10/               xv6 RISC-V trace system call, patch and report
+lab11/               Linux race condition, mutex, semaphore and atomic programs
+lab12/               Linux producer-consumer, condition variable, readers-writers and deadlock programs
+lab13/               xv6 RISC-V kernel counting semaphores (sem_init, sem_down, sem_up, sem_trydown), patch and report
 ```

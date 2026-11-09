@@ -1,0 +1,6 @@
+one: I have A, I want B
+one: I have both
+two: I have B, I want A
+two: I have both
+done
+exit code: 0

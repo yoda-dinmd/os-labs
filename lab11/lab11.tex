@@ -1,0 +1,432 @@
+\documentclass{../latex/utmreport}
+\newcommand{\ReportTitle}{Lab 11: The Race and the Semaphore}
+\input{../latex/report-common.tex}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\begin{document}
+\makeutmreporttitlepage
+\tableofcontents
+\clearpage
+\begin{utmabstract}[Abstract]
+The goal of this laboratory is to observe a data race when two threads concurrently update a shared counter without synchronization, eliminate the race using both a POSIX mutex and a POSIX semaphore, and apply the same semaphore primitive in three distinct roles: as a binary lock, as an ordering signal, and as a resource counter. In Part~1, an unprotected counter incremented one million times by each of two threads (\texttt{race.c}) loses hundreds of thousands of additions because \texttt{counter++} compiles into three non-atomic steps (load, add, store). In Part~2, wrapping the increment in a mutex (\texttt{mutex.c}) or a semaphore initialized to~1 (\texttt{sem.c}) guarantees the exact result of \texttt{2\,000\,000}, whereas initializing the semaphore to~2 reintroduces the race. In Part~3, a semaphore initialized to~0 (\texttt{order.c}) forces a reader thread to wait until a writer thread finishes writing a message. In Part~4, a semaphore initialized to~3 (\texttt{parking.c}) limits six car threads to at most three concurrent occupants in a parking lot. Finally, the optional C11 atomic version (\texttt{atomic.c}) achieves the exact sum without locks using a single indivisible CPU instruction.
+\utmkeywords{Linux, pthreads, race condition, critical section, mutex, POSIX semaphore, signaling, counting semaphore, C11 atomics}
+\end{utmabstract}
+\utmintroduction
+
+\section*{Goal of the laboratory (Scopul lucrării)}
+
+The purpose of this laboratory work is to observe how concurrent threads racing on shared memory lose updates, fix the race using POSIX synchronization primitives, and use a semaphore in three fundamental ways: as a mutual-exclusion lock, as an inter-thread ordering signal, and as a bounded resource counter. Specifically, the scope and objectives of the laboratory are:
+\begin{enumerate}
+\tightlist
+\item \textbf{Part 1 (See the race):} Compile and run \texttt{race.c} (without \texttt{-O2} so that \texttt{counter++} remains in memory), observe the non-deterministic lost additions when two threads each add~1 to \texttt{counter} one million times, and explain the three CPU steps behind \texttt{counter++}.
+\item \textbf{Part 2 (Fix it: mutex, then semaphore):} Protect \texttt{counter++} first with a \texttt{pthread\_mutex\_t} (\texttt{mutex.c}) and then with a binary \texttt{sem\_t} initialized to~1 (\texttt{sem.c}), test what happens when the semaphore is initialized to~2, and measure the execution-time cost of locking.
+\item \textbf{Part 3 (A semaphore as a signal):} Enforce execution order between a writer thread~A and a reader thread~B using a semaphore initialized to~0 (\texttt{order.c}), and observe what happens if its initial value is changed to~1.
+\item \textbf{Part 4 (A semaphore as a counter: the parking lot):} Use a counting semaphore initialized to~3 alongside a mutex for printing (\texttt{parking.c}) so that six car threads share three parking places, and observe how setting \texttt{PLACES} to~1 turns the counting semaphore back into a binary lock.
+\item \textbf{Optional (No lock at all):} Use \texttt{atomic\_fetch\_add} from \texttt{<stdatomic.h>} (\texttt{atomic.c}) to perform each increment as one indivisible CPU instruction and compare its speed with the mutex and semaphore versions.
+\end{enumerate}
+
+All programs were compiled on Linux (openSUSE Tumbleweed, x86\_64) with \texttt{gcc -Wall -pthread}. Complete execution transcripts are stored in \texttt{evidence/} and \texttt{report.md}.
+
+\chapter{Part 1: See the race}
+
+\section{Source code and execution of \texttt{race.c}}
+
+In \texttt{race.c}, two threads (\texttt{a} and \texttt{b}) each execute a loop of $N = 1\,000\,000$ iterations incrementing the shared global variable \texttt{counter} without any synchronization:
+
+\begin{lstlisting}[language=C]
+/* race.c - two threads add to the same counter, with no protection.
+ * Build: gcc -Wall -pthread -o race race.c   (no -O2: keep counter++ in memory)
+ * Run:   ./race   (several times)
+ */
+#include <stdio.h>
+#include <pthread.h>
+
+#define N 1000000
+
+long counter = 0;                /* shared by both threads */
+
+void *add(void *arg) {
+    for (int i = 0; i < N; i++)
+        counter++;               /* read, add 1, write back: three steps */
+    return NULL;
+}
+
+int main(void) {
+    pthread_t a, b;
+    pthread_create(&a, NULL, add, NULL);
+    pthread_create(&b, NULL, add, NULL);
+    pthread_join(a, NULL);
+    pthread_join(b, NULL);
+    printf("counter = %ld (expected %d)\n", counter, 2 * N);
+    return 0;
+}
+\end{lstlisting}
+
+Compiling without \texttt{-O2} (so the compiler loads and stores \texttt{counter} in memory on every iteration) and running \texttt{./race} three times produced:
+
+\begin{lstlisting}
+$ gcc -Wall -pthread -o race race.c
+$ ./race
+counter = 1031820 (expected 2000000)
+$ ./race
+counter = 1321476 (expected 2000000)
+$ ./race
+counter = 1153608 (expected 2000000)
+\end{lstlisting}
+
+\section{Observations for Part 1}
+
+\begin{enumerate}
+\tightlist
+\item \textbf{\texttt{counter++} looks like one step. Write the three steps the CPU really does.}
+At the hardware level, incrementing a variable in memory without an atomic prefix executes three separate operations:
+\begin{enumerate}
+\tightlist
+\item \emph{Load (Read):} Copy the current value of \texttt{counter} from memory into a CPU register (e.g., \texttt{movq counter(\%rip), \%rax}).
+\item \emph{Add (Modify):} Add \texttt{1} to the register value inside the CPU's arithmetic logic unit (e.g., \texttt{addq \$1, \%rax}).
+\item \emph{Store (Write):} Write the updated register value back to \texttt{counter} in memory (e.g., \texttt{movq \%rax, counter(\%rip)}).
+\end{enumerate}
+
+\item \textbf{Describe, with those steps, how two threads can lose one addition.}
+Suppose \texttt{counter} in memory currently equals \texttt{100}:
+\begin{itemize}
+\tightlist
+\item Thread~A executes \textbf{Step~1 (Load)} and reads \texttt{100} into its register.
+\item Simultaneously on another core (or after a context switch before Thread~A stores), Thread~B executes \textbf{Step~1 (Load)} and also reads \texttt{100} into its own register.
+\item Thread~A executes \textbf{Step~2 (Add)} ($\texttt{100} + 1 = \texttt{101}$) and \textbf{Step~3 (Store)}, writing \texttt{101} to \texttt{counter}.
+\item Thread~B executes \textbf{Step~2 (Add)} ($\texttt{100} + 1 = \texttt{101}$) and \textbf{Step~3 (Store)}, overwriting \texttt{counter} with \texttt{101}.
+\end{itemize}
+Both threads incremented the value they loaded, yet \texttt{counter} advanced from \texttt{100} to \texttt{101} instead of \texttt{102}, losing one addition.
+
+\item \textbf{Why is the result different at every run?}
+Thread scheduling across CPU cores, timer interrupts, cache-line invalidations, and background OS activity vary slightly on every run. Because the exact interleaving of the two threads' load-add-store instructions is non-deterministic, the number of overlapping increments changes every time \texttt{./race} is executed (\texttt{1031820}, \texttt{1321476}, \texttt{1153608}).
+\end{enumerate}
+
+\chapter{Part 2: Fix it: mutex, then semaphore}
+
+\section{2.1 A mutex around \texttt{counter++} (\texttt{mutex.c})}
+
+Placing \texttt{pthread\_mutex\_lock(\&lock)} before \texttt{counter++} and \texttt{pthread\_mutex\_unlock(\&lock)} after it turns \texttt{counter++} into a critical section that only one thread may execute at a time:
+
+\begin{lstlisting}[language=C]
+/* mutex.c - the same counter, now protected by a mutex.
+ * Build: gcc -Wall -pthread -o mutex mutex.c
+ */
+#include <stdio.h>
+#include <pthread.h>
+
+#define N 1000000
+
+long counter = 0;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+void *add(void *arg) {
+    for (int i = 0; i < N; i++) {
+        pthread_mutex_lock(&lock);    /* only one thread past this line */
+        counter++;                    /* the critical section */
+        pthread_mutex_unlock(&lock);  /* let the other one in */
+    }
+    return NULL;
+}
+
+int main(void) {
+    pthread_t a, b;
+    pthread_create(&a, NULL, add, NULL);
+    pthread_create(&b, NULL, add, NULL);
+    pthread_join(a, NULL);
+    pthread_join(b, NULL);
+    printf("counter = %ld (expected %d)\n", counter, 2 * N);
+    return 0;
+}
+\end{lstlisting}
+
+\section{2.2 The same lock, made from a semaphore (\texttt{sem.c})}
+
+A POSIX semaphore initialized to \texttt{1} (\texttt{sem\_init(\&s, 0, 1)}) behaves as a binary lock: \texttt{sem\_wait(\&s)} decrements the value from \texttt{1} to \texttt{0} (or blocks when it is already \texttt{0}), and \texttt{sem\_post(\&s)} increments it back from \texttt{0} to \texttt{1}:
+
+\begin{lstlisting}[language=C]
+/* sem.c - the same counter, protected by a semaphore that starts at 1.
+ * Build: gcc -Wall -pthread -o sem sem.c
+ */
+#include <stdio.h>
+#include <pthread.h>
+#include <semaphore.h>
+
+#define N 1000000
+
+long counter = 0;
+sem_t s;
+
+void *add(void *arg) {
+    for (int i = 0; i < N; i++) {
+        sem_wait(&s);                 /* 1 -> 0: I go in; at 0: wait */
+        counter++;
+        sem_post(&s);                 /* 0 -> 1: the next one may go in */
+    }
+    return NULL;
+}
+
+int main(void) {
+    sem_init(&s, 0, 1);               /* 0 = shared between threads, 1 = start value */
+    pthread_t a, b;
+    pthread_create(&a, NULL, add, NULL);
+    pthread_create(&b, NULL, add, NULL);
+    pthread_join(a, NULL);
+    pthread_join(b, NULL);
+    printf("counter = %ld (expected %d)\n", counter, 2 * N);
+    sem_destroy(&s);
+    return 0;
+}
+\end{lstlisting}
+
+Running both \texttt{./mutex} and \texttt{./sem} three times each:
+
+\begin{lstlisting}
+$ gcc -Wall -pthread -o mutex mutex.c
+$ ./mutex
+counter = 2000000 (expected 2000000)
+$ ./mutex
+counter = 2000000 (expected 2000000)
+$ ./mutex
+counter = 2000000 (expected 2000000)
+
+$ gcc -Wall -pthread -o sem sem.c
+$ ./sem
+counter = 2000000 (expected 2000000)
+$ ./sem
+counter = 2000000 (expected 2000000)
+$ ./sem
+counter = 2000000 (expected 2000000)
+\end{lstlisting}
+
+\section{2.3 The price of the lock}
+
+Measuring the wall-clock, user, and kernel CPU time of \texttt{./race}, \texttt{./mutex}, and \texttt{./sem}:
+
+\begin{lstlisting}
+$ time ./race
+counter = 1125516 (expected 2000000)
+real 0.015s  user 0.025s  sys 0.001s
+
+$ time ./mutex
+counter = 2000000 (expected 2000000)
+real 0.157s  user 0.195s  sys 0.104s
+
+$ time ./sem
+counter = 2000000 (expected 2000000)
+real 0.454s  user 0.557s  sys 0.344s
+\end{lstlisting}
+
+\section{Observations for Part 2}
+
+\begin{enumerate}
+\tightlist
+\item \textbf{Run \texttt{mutex} and \texttt{sem} three times each. Is the answer always 2\,000\,000?}
+\textbf{Yes.} Across all three runs of \texttt{./mutex} and all three runs of \texttt{./sem}, the output is always \texttt{counter = 2000000 (expected 2000000)}. Mutual exclusion ensures that the three-step load-add-store sequence of one thread never overlaps with that of the other.
+
+\item \textbf{What would happen in \texttt{sem.c} with \texttt{sem\_init(\&s, 0, 2)}? Try it and explain.}
+Changing the initial semaphore value to \texttt{2} and running three times produced:
+\begin{lstlisting}
+counter = 1983089 (expected 2000000)
+counter = 1989142 (expected 2000000)
+counter = 1988601 (expected 2000000)
+\end{lstlisting}
+The final count falls short of \texttt{2\,000\,000} again. Starting the semaphore at \texttt{2} permits \textbf{two threads} to pass \texttt{sem\_wait(\&s)} concurrently (the first decrements \texttt{s} from \texttt{2} to \texttt{1}, and the second decrements it from \texttt{1} to \texttt{0} without blocking). Because there are only two threads in the program, neither thread ever blocks and both enter the critical section simultaneously, recreating the data race.
+
+\item \textbf{Why is the locked version slower?}
+Whereas \texttt{./race} finishes in \texttt{0.015s} (with a wrong answer), \texttt{./mutex} takes \texttt{0.157s} and \texttt{./sem} takes \texttt{0.454s} for three reasons:
+\begin{itemize}
+\tightlist
+\item \emph{Atomic operations and cache coherence:} Acquiring and releasing the lock $2\,000\,000$ times executes hardware atomic read-modify-write instructions and memory fences that transfer ownership of the lock's cache line back and forth between CPU cores.
+\item \emph{Kernel \texttt{futex} contention and context switching:} When one thread attempts to lock while the other thread holds the lock, it invokes the Linux \texttt{futex} system call to sleep and wake up in the kernel, increasing system CPU time from \texttt{0.001s} in \texttt{race} to \texttt{0.104s} in \texttt{mutex} and \texttt{0.344s} in \texttt{sem}.
+\item \emph{Serialization:} Only one thread can execute inside the critical section at any instant.
+\end{itemize}
+\end{enumerate}
+
+\chapter{Part 3: A semaphore as a signal}
+
+\section{Source code and execution of \texttt{order.c}}
+
+In \texttt{order.c}, thread~B (\texttt{reader}) is started before thread~A (\texttt{writer}), but must print \texttt{message} only after thread~A has written \texttt{"hello"}. The semaphore \texttt{ready} is initialized to \texttt{0}:
+
+\begin{lstlisting}[language=C]
+/* order.c - thread B must wait until thread A has written the message.
+ * A semaphore that starts at 0 is a signal: sem_wait blocks until someone posts.
+ * Build: gcc -Wall -pthread -o order order.c
+ */
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <semaphore.h>
+
+char message[32];
+sem_t ready;                          /* starts at 0: nothing is ready yet */
+
+void *writer(void *arg) {
+    sleep(1);                         /* pretend the work takes a while */
+    strcpy(message, "hello");
+    printf("A: message written\n");
+    sem_post(&ready);                 /* 0 -> 1: wake up B */
+    return NULL;
+}
+
+void *reader(void *arg) {
+    printf("B: waiting for the message...\n");
+    sem_wait(&ready);                 /* blocks while the value is 0 */
+    printf("B: I read \"%s\"\n", message);
+    return NULL;
+}
+
+int main(void) {
+    sem_init(&ready, 0, 0);
+    pthread_t a, b;
+    pthread_create(&b, NULL, reader, NULL);   /* B starts first, on purpose */
+    pthread_create(&a, NULL, writer, NULL);
+    pthread_join(a, NULL);
+    pthread_join(b, NULL);
+    sem_destroy(&ready);
+    return 0;
+}
+\end{lstlisting}
+
+Compiling and running \texttt{./order}:
+
+\begin{lstlisting}
+$ gcc -Wall -pthread -o order order.c
+$ ./order
+B: waiting for the message...
+A: message written
+B: I read "hello"
+\end{lstlisting}
+
+\section{Observations for Part 3}
+
+\begin{enumerate}
+\tightlist
+\item \textbf{Change the start value to 1 (\texttt{sem\_init(\&ready, 0, 1)}), compile, run. What does B read now, and why?}
+Running with \texttt{sem\_init(\&ready, 0, 1)} produces:
+\begin{lstlisting}
+B: waiting for the message...
+B: I read ""
+A: message written
+\end{lstlisting}
+Thread~B reads the empty string \texttt{""} before Thread~A writes \texttt{"hello"}. Because \texttt{ready} starts at \texttt{1}, \texttt{sem\_wait(\&ready)} in \texttt{reader()} immediately decrements \texttt{ready} from \texttt{1} to \texttt{0} and returns without waiting. Thread~B therefore prints the global \texttt{message} buffer (initially all zero bytes) while Thread~A is still sleeping in \texttt{sleep(1)}.
+
+\item \textbf{Put it back to 0. In one sentence: what does a semaphore that starts at 0 mean?}
+A semaphore initialized to \texttt{0} represents a \textbf{synchronization signal for an event that has not yet occurred}, causing any waiting thread (\texttt{sem\_wait}) to block until another thread announces the event (\texttt{sem\_post}).
+\end{enumerate}
+
+\chapter{Part 4: A semaphore as a counter: the parking lot}
+
+\section{Source code and execution of \texttt{parking.c}}
+
+In \texttt{parking.c}, six car threads compete for three parking spaces. The semaphore \texttt{places} starts at \texttt{PLACES} (\texttt{3}) and counts how many free spaces remain, while \texttt{lock} protects the \texttt{inside} counter and \texttt{printf} call:
+
+\begin{lstlisting}[language=C]
+/* parking.c - 6 cars, 3 places. A semaphore that starts at 3 counts the free places.
+ * Build: gcc -Wall -pthread -o parking parking.c
+ */
+#include <stdio.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <semaphore.h>
+
+#define PLACES 3
+#define CARS   6
+
+sem_t places;                         /* free places */
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+int inside = 0;                       /* only for printing */
+
+void *car(void *arg) {
+    long id = (long)arg;
+    sem_wait(&places);                /* take a place, or wait */
+    pthread_mutex_lock(&lock);
+    inside++;
+    printf("car %ld enters (inside: %d)\n", id, inside);
+    pthread_mutex_unlock(&lock);
+
+    sleep(1);                         /* parked */
+
+    pthread_mutex_lock(&lock);
+    inside--;
+    printf("car %ld leaves (inside: %d)\n", id, inside);
+    pthread_mutex_unlock(&lock);
+    sem_post(&places);                /* give the place back */
+    return NULL;
+}
+
+int main(void) {
+    sem_init(&places, 0, PLACES);
+    pthread_t t[CARS];
+    for (long i = 0; i < CARS; i++)
+        pthread_create(&t[i], NULL, car, (void *)(i + 1));
+    for (int i = 0; i < CARS; i++)
+        pthread_join(t[i], NULL);
+    sem_destroy(&places);
+    return 0;
+}
+\end{lstlisting}
+
+Compiling and running \texttt{./parking}:
+
+\begin{lstlisting}
+$ gcc -Wall -pthread -o parking parking.c
+$ ./parking
+car 1 enters (inside: 1)
+car 2 enters (inside: 2)
+car 3 enters (inside: 3)
+car 1 leaves (inside: 2)
+car 3 leaves (inside: 1)
+car 2 leaves (inside: 0)
+car 4 enters (inside: 1)
+car 5 enters (inside: 2)
+car 6 enters (inside: 3)
+car 4 leaves (inside: 2)
+car 5 leaves (inside: 1)
+car 6 leaves (inside: 0)
+\end{lstlisting}
+
+\section{Observations for Part 4 and Optional Atomic Counter}
+
+\begin{enumerate}
+\tightlist
+\item \textbf{What is the largest value of \texttt{"inside"} you see? Which line of code guarantees it?}
+The largest value of \texttt{inside} is \textbf{\texttt{3}}. This upper bound is guaranteed by \texttt{sem\_wait(\&places);} at the start of \texttt{car()} (together with \texttt{sem\_init(\&places, 0, PLACES);} where \texttt{PLACES} is \texttt{3}): after three cars decrement \texttt{places} from \texttt{3} down to \texttt{0}, any additional car thread calling \texttt{sem\_wait(\&places)} blocks until a parked car leaves and calls \texttt{sem\_post(\&places)}.
+
+\item \textbf{Set \texttt{PLACES} to 1. What does the semaphore become?}
+With \texttt{\#define PLACES 1}, the output becomes strictly one car at a time (\texttt{inside} never exceeds \texttt{1}):
+\begin{lstlisting}
+car 1 enters (inside: 1)
+car 1 leaves (inside: 0)
+car 2 enters (inside: 1)
+car 2 leaves (inside: 0)
+...
+car 6 enters (inside: 1)
+car 6 leaves (inside: 0)
+\end{lstlisting}
+Setting \texttt{PLACES} to \texttt{1} turns the counting semaphore into a \textbf{binary semaphore (a mutex / lock)} that enforces mutual exclusion so only one car can be inside the parking lot at a time.
+\end{enumerate}
+
+Finally, the optional lock-free program \texttt{atomic.c} replaces \texttt{long counter} with \texttt{atomic\_long counter} and increments it via \texttt{atomic\_fetch\_add(\&counter, 1)}:
+
+\begin{lstlisting}
+$ gcc -Wall -pthread -o atomic atomic.c
+$ time ./atomic
+counter = 2000000 (expected 2000000)
+real 0.080s  user 0.154s  sys 0.001s
+\end{lstlisting}
+
+Because \texttt{atomic\_fetch\_add} compiles to a single hardware-locked instruction (\texttt{lock xaddq}), it eliminates the race without any kernel \texttt{futex} calls (\texttt{sys 0.001s}), running in \texttt{0.080s} compared with \texttt{0.157s} for \texttt{mutex} and \texttt{0.454s} for \texttt{sem}.
+
+\utmconclusions
+
+This laboratory demonstrated why unsynchronized concurrent updates fail and how a single synchronization primitive—the semaphore—can solve three distinct problems depending on its initial value:
+\begin{itemize}
+\tightlist
+\item In \textbf{Part~1}, running \texttt{race.c} showed that \texttt{counter++} is a three-step load-add-store sequence in which concurrent threads overwrite each other's updates non-deterministically.
+\item In \textbf{Part~2}, protecting the critical section with either \texttt{pthread\_mutex\_t} or a semaphore initialized to~\textbf{1} restored the exact sum of \texttt{2\,000\,000}, whereas initializing the semaphore to~2 allowed both threads inside at once and reintroduced lost updates.
+\item In \textbf{Part~3}, initializing a semaphore to~\textbf{0} (\texttt{order.c}) turned it into an ordering signal that blocked the reader until the writer posted completion.
+\item In \textbf{Part~4}, initializing a semaphore to~\textbf{3} (\texttt{parking.c}) turned it into a resource counter that bounded concurrency to at most three threads inside the critical region simultaneously.
+\end{itemize}
+\end{document}
