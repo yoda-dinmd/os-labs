@@ -1,0 +1,60 @@
+\documentclass{../latex/utmreport}
+\newcommand{\ReportTitle}{Lab 18: Build a User-Level Thread Switch}
+\input{../latex/report-common.tex}
+
+\begin{document}
+\makeutmreporttitlepage
+\tableofcontents
+\clearpage
+
+\begin{utmabstract}[Abstract]
+A cooperative thread scheduler in an xv6 user process switches between three workers using a RISC-V assembly routine. The routine saves and restores the return address, stack pointer, and twelve callee-saved integer registers. A QEMU run verifies that each worker completes 100 iterations in round-robin order.
+\utmkeywords{xv6, RISC-V, cooperative threads, context switch, round-robin scheduling}
+\end{utmabstract}
+
+\utmintroduction
+Each user thread keeps its own stack and register context within one xv6 process. The scheduler runs in user space and chooses the next thread each time a worker yields or finishes. The implementation follows the register layout used by xv6's kernel switch routine.
+
+\chapter{Part 1: The switch}
+
+\section{Thread creation and scheduling}
+The main thread starts in slot zero. Each new thread gets a free slot with a private 8 KiB stack. \code{thread_create} sets the saved \code{ra} to the entry function and \code{sp} to the 16-byte-aligned top of that stack before marking the slot runnable.
+
+When a worker yields, it marks itself runnable. The scheduler scans from the slot after the current thread, wrapping around the table. It marks the chosen thread running and passes both context addresses to \code{thread_switch}. A finished worker marks its slot free. When the last worker finishes, the scheduler prints the handout's completion message and exits successfully.
+
+\section{Register context and return address}
+The switch takes the outgoing context in \code{a0} and the incoming context in \code{a1}. Fourteen 64-bit stores save \code{ra}, \code{sp}, and \code{s0} through \code{s11}, and fourteen loads restore the corresponding registers from the selected thread. The calling convention already lets a function call clobber caller-saved registers, so those need no slots here.
+
+\begin{lstlisting}
+        sd ra, 0(a0)
+        sd sp, 8(a0)
+        # Save s0 through s11 at offsets 16 through 104.
+        ld ra, 0(a1)
+        ld sp, 8(a1)
+        # Restore s0 through s11 from the same offsets.
+        ret
+\end{lstlisting}
+
+Calling \code{thread_switch} places the outgoing thread's resume address in \code{ra}. After the switch restores the incoming \code{ra} and \code{sp}, \code{ret} jumps to that saved address using the incoming thread's stack. A resumed thread continues just after its original switch call. A newly created thread jumps to its entry function on its first switch because creation seeded \code{ra} with that address.
+
+\section{Build integration}
+The xv6 \code{Makefile} adds \code{user/_uthread} to \code{UPROGS}, which puts the program into \code{fs.img}. Its link rule combines \code{uthread.o}, \code{uthread_switch.o}, and the xv6 user library with \code{user/user.ld}. The complete change is provided in \code{xv6-uthread.patch}.
+
+\chapter{Part 2: Run it}
+
+\section{QEMU verification}
+After installing the patch, I built the kernel and disk image with the RISC-V GCC toolchain and booted QEMU with three virtual CPUs. At the xv6 shell I ran \code{uthread}. Each worker first sets its own started flag. Worker \code{c} is the first to see both peer flags set and begins counting.
+
+\lstinputlisting[firstline=9,lastline=18]{evidence/uthread.txt}
+
+The full transcript contains 300 count lines. Each index from 0 through 99 appears in the order \code{c}, \code{a}, \code{b}. All three workers report 100 iterations, and the final scheduler message is followed by the xv6 shell prompt.
+
+\lstinputlisting[firstline=310,lastline=318]{evidence/uthread.txt}
+
+\utmconclusions
+The assembly routine preserved each worker's continuation and stack across yields. The three workers made progress in a fixed order and completed all their iterations in a single xv6 user process.
+
+\reportreferences
+  {Build a User-Level Thread Switch}
+  {OS 2026 - Lab 18 - A User-Level Thread Switch (xv6).pdf}
+\end{document}

@@ -1,0 +1,29 @@
+$ gcc -Wall -Wextra -pthread -o fire fire.c
+
+$ ./fire
+thread 1 sees counter = 0
+thread 2 sees counter = 0
+expected: 2000000
+counter: 1079270
+lost updates: 920730
+
+$ ./fire
+thread 1 sees counter = 0
+thread 2 sees counter = 0
+expected: 2000000
+counter: 1080160
+lost updates: 919840
+
+$ ./fire
+thread 1 sees counter = 0
+thread 2 sees counter = 0
+expected: 2000000
+counter: 1070093
+lost updates: 929907
+
+$ ./fire
+thread 1 sees counter = 0
+thread 2 sees counter = 19110
+expected: 2000000
+counter: 1021287
+lost updates: 978713

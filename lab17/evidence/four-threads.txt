@@ -1,0 +1,26 @@
+$ ./fire 4
+thread 1 sees counter = 0
+thread 2 sees counter = 0
+thread 3 sees counter = 6461
+thread 4 sees counter = 7120
+expected: 4000000
+counter: 1098403
+lost updates: 2901597
+
+$ ./fire 4
+thread 1 sees counter = 0
+thread 2 sees counter = 0
+thread 4 sees counter = 9740
+thread 3 sees counter = 9824
+expected: 4000000
+counter: 1114100
+lost updates: 2885900
+
+$ ./fire 4
+thread 1 sees counter = 0
+thread 2 sees counter = 0
+thread 3 sees counter = 5179
+thread 4 sees counter = 6186
+expected: 4000000
+counter: 1069228
+lost updates: 2930772

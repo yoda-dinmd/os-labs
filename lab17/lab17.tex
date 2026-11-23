@@ -1,0 +1,73 @@
+\documentclass{../latex/utmreport}
+\newcommand{\ReportTitle}{Lab 17: Threads Share Memory, and Race}
+\input{../latex/report-common.tex}
+
+\begin{document}
+\makeutmreporttitlepage
+\tableofcontents
+\clearpage
+
+\begin{utmabstract}[Abstract]
+Two POSIX threads each attempt one million increments of the same counter. Each worker's starting value shows whether it observed updates before entering the loop. The final count shows how many increments were lost. The experiment is repeated with four workers to measure the effect of additional contention.
+\utmkeywords{Linux, POSIX threads, shared memory, data race, lost update}
+\end{utmabstract}
+
+\utmintroduction
+Threads in a Linux process share the process's address space. This experiment uses a shared global counter to observe both that sharing and the effect of updating the counter without synchronization. The test ran on openSUSE Tumbleweed with GCC and POSIX threads.
+
+\chapter{Part 1: Shared and racing}
+
+\section{Procedure}
+In \code{fire.c}, each worker reads and prints the current counter, then attempts one million increments. The main thread joins all the workers before reading the result. The lab build leaves optimization disabled so that the experiment observes memory updates from the loop.
+
+\begin{lstlisting}
+$ gcc -Wall -Wextra -pthread -o fire fire.c
+$ ./fire
+\end{lstlisting}
+
+\section{Observations}
+Four recorded runs with two workers all finished below the expected 2,000,000. In the fourth recorded run, thread 2 read 19,110 before its first increment.
+
+\lstinputlisting[firstline=24,lastline=29]{evidence/two-threads.txt}
+
+\paragraph{Shared memory.}
+Thread 2 could see increments already performed by thread 1 because both access the same global variable. Both workers read zero at startup in the first three runs. The first read can happen before either worker starts incrementing.
+
+\paragraph{Lost updates.}
+Each \code{counter++} reads the value, adds one, and stores the result. If both workers read 100 before either stores, both compute and store 101. The counter increases by one for two attempted increments. The overlap between the workers' reads and writes varies between runs. The unsynchronized accesses are a data race in C and have undefined behavior, so the experiment gives observed values rather than a guaranteed range.
+
+\chapter{Part 2: Four workers}
+
+\section{Comparison}
+Running \code{./fire 4} doubles the expected total while keeping one million increments per worker. The number of lost updates is the expected count minus the final count.
+
+\begin{table}[H]
+\centering
+\caption{Recorded results with two and four workers.}
+\begin{tabular}{r r r r}
+\hline
+Workers & Expected & Final counter & Lost updates \\
+\hline
+2 & 2,000,000 & 1,079,270 & 920,730 \\
+2 & 2,000,000 & 1,080,160 & 919,840 \\
+2 & 2,000,000 & 1,070,093 & 929,907 \\
+2 & 2,000,000 & 1,021,287 & 978,713 \\
+4 & 4,000,000 & 1,098,403 & 2,901,597 \\
+4 & 4,000,000 & 1,114,100 & 2,885,900 \\
+4 & 4,000,000 & 1,069,228 & 2,930,772 \\
+\hline
+\end{tabular}
+\end{table}
+
+The loss increased both in absolute terms and as a fraction of the expected total. The recorded runs lost about 46--49\% of increments with two workers and 72--73\% with four workers.
+
+\section{Proposed fix}
+Use one mutex to protect every shared counter access while the workers are active, holding it across the entire read-add-write sequence of each increment.
+
+\utmconclusions
+The startup reads show that the workers observe changes to the same counter. The final values vary because unsynchronized increments can overwrite work, and adding workers increased the loss in the recorded trials.
+
+\reportreferences
+  {Threads Share Memory, and Race}
+  {OS 2026 - Lab 17 - Threads Share Memory and Race (Linux).pdf}
+\end{document}

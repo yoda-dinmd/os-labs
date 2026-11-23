@@ -4,14 +4,14 @@ set -euo pipefail
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p "$repo_dir/reports"
 
-all_labs=(lab1 lab2 lab3 lab4 lab5 lab6 lab7 lab8 lab9 lab10 lab11 lab12 lab13)
+all_labs=(lab1 lab2 lab3 lab4 lab5 lab6 lab7 lab8 lab9 lab10 lab11 lab12 lab13 lab17 lab18)
 
 usage() {
   echo "Usage: $(basename "$0") [all | <lab> ...]"
   echo "Examples:"
-  echo "  $(basename "$0") 11 12 13   # build lab11, lab12, and lab13"
-  echo "  $(basename "$0") lab13      # build lab13"
-  echo "  $(basename "$0") all        # build all labs (lab1..lab13)"
+  echo "  $(basename "$0") 17 18      # build lab17 and lab18"
+  echo "  $(basename "$0") lab18      # build lab18"
+  echo "  $(basename "$0") all        # build all available labs"
   echo "  $(basename "$0")            # interactive prompt"
 }
 
@@ -32,7 +32,7 @@ selected=()
 
 if [[ $# -eq 0 ]]; then
   if [[ -t 0 ]]; then
-    echo "Available reports: 1 2 3 4 5 6 7 8 9 10 11 12 13 (or 'all')"
+    echo "Available reports: ${all_labs[*]//lab/} (or 'all')"
     read -r -p "Select report(s) to build [all]: " input
     if [[ -z "${input// }" || "$input" == "all" || "$input" == "a" ]]; then
       selected=("${all_labs[@]}")

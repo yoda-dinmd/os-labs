@@ -1,0 +1,19 @@
+Lab 18 — Build a User-Level Thread Switch
+
+Observe: What does thread_switch save and load, and why does ra make
+execution continue in the other thread?
+
+The first argument (a0) points to the outgoing thread's context, and the
+second (a1) points to the incoming thread's context. thread_switch stores
+ra (return address), sp (stack pointer), and s0 through s11 (the
+callee-saved integer registers) into the outgoing context. It loads the
+same 14 registers from the incoming context. The caller already follows
+the RISC-V calling convention for caller-saved registers.
+
+Calling thread_switch puts the resume address for the outgoing call in
+ra. The switch saves that address and replaces it with the incoming
+thread's ra. The ret instruction jumps to the address in the restored ra,
+so it lands just after the incoming thread's earlier thread_switch call.
+The restored sp puts that thread's own call frames back in use. For a
+new thread, thread_create initializes ra to the entry function and sp to
+the 16-byte-aligned top of its stack, so the first ret starts that function.
